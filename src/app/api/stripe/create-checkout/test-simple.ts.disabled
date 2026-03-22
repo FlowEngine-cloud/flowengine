@@ -1,0 +1,21 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function POST(req: NextRequest) {
+  try {
+    const { priceId, planType } = await req.json();
+
+    console.log('Simple test endpoint called:', { priceId, planType });
+
+    return NextResponse.json({
+      test: true,
+      received: { priceId, planType },
+      env: {
+        hasStripeSecret: !!process.env.STRIPE_SECRET_KEY,
+        hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      },
+    });
+  } catch (error: any) {
+    console.error('Test error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

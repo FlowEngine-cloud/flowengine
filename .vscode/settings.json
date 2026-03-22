@@ -1,0 +1,5 @@
+{
+  "git.enabled": true,
+  "git.path": "/opt/homebrew/bin/git",
+  "git.autoRepositoryDetection": true
+}

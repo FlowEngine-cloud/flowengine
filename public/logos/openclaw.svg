@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Three claw marks, curved downward -->
+  <path d="M6 3 C4.5 5 4 8 5 11 L7 19" />
+  <path d="M12 2 C10.5 4 10 7.5 11 11 L12.5 19" />
+  <path d="M18 3 C16.5 5 16 8 17 11 L19 19" />
+</svg>
