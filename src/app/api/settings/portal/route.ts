@@ -45,10 +45,15 @@ export async function GET(req: NextRequest) {
       .from('portal_settings')
       .select('*')
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (error) {
       return NextResponse.json({ error: 'Failed to load settings' }, { status: 500 });
+    }
+
+    // No row yet — return safe empty defaults so the UI doesn't break
+    if (!data) {
+      return NextResponse.json({ oauth_credentials: {} });
     }
 
     // Mask sensitive fields - only show if set (boolean) not the actual value
@@ -99,11 +104,27 @@ export async function PATCH(req: NextRequest) {
     updates.updated_at = new Date().toISOString();
     updates.updated_by = user.id;
 
-    // Update the single settings row
-    const { error } = await getSupabaseAdmin()
+    // Ensure a row exists, then update it
+    const { data: existing } = await getSupabaseAdmin()
       .from('portal_settings')
-      .update(updates)
-      .not('id', 'is', null); // Updates all rows (there should be only one)
+      .select('id')
+      .limit(1)
+      .maybeSingle();
+
+    let dbError;
+    if (existing?.id) {
+      const { error } = await getSupabaseAdmin()
+        .from('portal_settings')
+        .update(updates)
+        .eq('id', existing.id);
+      dbError = error;
+    } else {
+      const { error } = await getSupabaseAdmin()
+        .from('portal_settings')
+        .insert(updates);
+      dbError = error;
+    }
+    const error = dbError;
 
     if (error) {
       console.error('[portal-settings] Update error:', JSON.stringify(error), 'code:', error.code, 'msg:', error.message, 'details:', error.details);

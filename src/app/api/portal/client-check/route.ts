@@ -15,9 +15,19 @@ export async function GET(request: Request) {
 
   const { data } = await supabaseAdmin
     .from('client_instances')
-    .select('instance_id, invited_by')
+    .select('instance_id, invited_by, access_level')
     .eq('user_id', user.id);
 
   const instances = data || [];
-  return NextResponse.json({ isClient: instances.length > 0, instances });
+
+  // Full access = access_level of 'edit' or 'admin'
+  const allowFullAccess = instances.some(
+    (i) => i.access_level === 'edit' || i.access_level === 'admin'
+  );
+
+  return NextResponse.json({
+    isClient: instances.length > 0,
+    allowFullAccess,
+    instances,
+  });
 }

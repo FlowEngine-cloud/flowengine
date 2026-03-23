@@ -21,7 +21,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const { user, loading: authLoading } = useAuth();
   const { logoUrl } = useAgencyLogo();
   const router = useRouter();
-  const { role, agencyId, loading: roleLoading } = usePortalRole();
+  const { role, agencyId, allowFullAccess, loading: roleLoading } = usePortalRole();
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState(false);
 
@@ -59,7 +59,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   }
 
   return (
-    <PortalRoleContext.Provider value={{ role, agencyId, loading: roleLoading }}>
+    <PortalRoleContext.Provider value={{ role, agencyId, allowFullAccess, loading: roleLoading }}>
       <div className="h-screen bg-black flex flex-col">
         {IS_DEMO && (
           <div className="flex-shrink-0 bg-yellow-500/10 border-b border-yellow-500/20 px-4 py-2 flex items-center justify-center gap-3 text-xs text-yellow-400">

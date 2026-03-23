@@ -13,7 +13,7 @@ import { HostingContext } from './context';
 
 export default function HostingLayout({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
-  const { role, loading: roleLoading } = usePortalRoleContext();
+  const { role, allowFullAccess, loading: roleLoading } = usePortalRoleContext();
   const { instances, loading, refetch: refetchInstances } = usePortalInstances();
   const router = useRouter();
   const pathname = usePathname();
@@ -111,6 +111,16 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
   }, [loading, instances, session?.access_token]);
 
   const isClient = role === 'client';
+  const isSimplifiedClient = isClient && !allowFullAccess;
+
+  // Route guard: simplified clients cannot access hosting
+  useEffect(() => {
+    if (!roleLoading && isSimplifiedClient) {
+      router.replace('/portal');
+    }
+  }, [roleLoading, isSimplifiedClient, router]);
+
+  if (isSimplifiedClient) return null;
 
   // Determine selected item from pathname
   const afterHosting = pathname?.split('/portal/hosting/')[1] || '';

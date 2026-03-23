@@ -10,6 +10,7 @@ export interface PortalRoleInfo {
   role: PortalRole;
   agencyId: string | null;
   clientInstanceIds: string[];
+  allowFullAccess: boolean;
   loading: boolean;
 }
 
@@ -38,6 +39,7 @@ export function usePortalRole(): PortalRoleInfo {
     role: 'free',
     agencyId: null,
     clientInstanceIds: [],
+    allowFullAccess: false,
   });
   const [loading, setLoading] = useState(!cached);
 
@@ -62,7 +64,7 @@ export function usePortalRole(): PortalRoleInfo {
       // Check if user is a client — uses server-side route to bypass client_instances RLS
       fetch('/api/portal/client-check', {
         headers: { Authorization: `Bearer ${session.access_token}` },
-      }).then(r => r.json()).catch(() => ({ isClient: false, instances: [] })),
+      }).then(r => r.json()).catch(() => ({ isClient: false, allowFullAccess: false, instances: [] })),
       // Check if user is a team member of an agency owner
       supabase
         .from('team_members')
@@ -80,6 +82,7 @@ export function usePortalRole(): PortalRoleInfo {
     let role: PortalRole = 'free';
     let agencyId: string | null = null;
     const clientInstanceIds: string[] = [];
+    let allowFullAccess = false;
 
     if (ownsInstances || isTeamMember) {
       // User owns instances or is a team member of an agency — treat as agency
@@ -90,9 +93,10 @@ export function usePortalRole(): PortalRoleInfo {
       for (const link of clientLinks) {
         clientInstanceIds.push(link.instance_id);
       }
+      allowFullAccess = clientCheckRes.allowFullAccess === true;
     }
 
-    const result = { role, agencyId, clientInstanceIds };
+    const result = { role, agencyId, clientInstanceIds, allowFullAccess };
     setInfo(result);
     setCache(result);
     setLoading(false);

@@ -7,12 +7,14 @@ import type { PortalRole } from '@/components/portal/usePortalRole';
 interface PortalRoleContextValue {
   role: PortalRole;
   agencyId: string | null;
+  allowFullAccess: boolean;
   loading: boolean;
 }
 
 export const PortalRoleContext = createContext<PortalRoleContextValue>({
   role: 'free',
   agencyId: null,
+  allowFullAccess: false,
   loading: true,
 });
 

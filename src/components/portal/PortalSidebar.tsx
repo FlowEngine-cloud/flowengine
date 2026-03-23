@@ -42,7 +42,7 @@ const BOTTOM_ITEMS: NavItem[] = [
 export default function PortalSidebar() {
   const pathname = usePathname();
   const { logoUrl } = useAgencyLogo();
-  const { role } = usePortalRole();
+  const { role, allowFullAccess } = usePortalRole();
 
   const knownSections = ['/portal/hosting', '/portal/services', '/portal/clients', '/portal/templates', '/portal/ui-studio', '/portal/settings'];
 
@@ -108,8 +108,11 @@ export default function PortalSidebar() {
       <nav className="flex-1 flex flex-col items-center gap-1 overflow-y-auto scrollbar-hide">
         {role === 'client' ? (
           <>
-            {/* Client mode: Overview only */}
+            {/* Client: Manage always visible */}
             {renderNavItem({ icon: LayoutDashboard, label: 'Manage', href: '/portal' })}
+            {/* Full access clients also get Hosting + Services */}
+            {allowFullAccess && renderNavItem({ icon: Server, label: 'Hosting', href: '/portal/hosting' })}
+            {allowFullAccess && renderNavItem({ icon: Plug, label: 'Services', href: '/portal/services' })}
           </>
         ) : (
           <>
@@ -127,7 +130,7 @@ export default function PortalSidebar() {
 
       {/* Bottom actions */}
       <div className="flex flex-col items-center gap-1 pt-3 border-t border-gray-800">
-        {BOTTOM_ITEMS.map(renderNavItem)}
+        {role !== 'client' && BOTTOM_ITEMS.map(renderNavItem)}
         <button
           onClick={async () => {
             await supabase.auth.signOut();
