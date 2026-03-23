@@ -108,10 +108,8 @@ export default function PortalSidebar() {
       <nav className="flex-1 flex flex-col items-center gap-1 overflow-y-auto scrollbar-hide">
         {role === 'client' ? (
           <>
-            {/* Client mode: Overview + Hosting & Services (clients have paid access) */}
+            {/* Client mode: Overview only */}
             {renderNavItem({ icon: LayoutDashboard, label: 'Manage', href: '/portal' })}
-            {renderNavItem({ icon: Server, label: 'Hosting', href: '/portal/hosting' })}
-            {renderNavItem({ icon: Plug, label: 'Services', href: '/portal/services' })}
           </>
         ) : (
           <>

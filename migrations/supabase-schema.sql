@@ -643,6 +643,33 @@ CREATE POLICY "Agency can manage custom entries" ON agency_client_custom_entries
 CREATE POLICY "Service role full access acce" ON agency_client_custom_entries FOR ALL TO service_role USING (true);
 
 -- ============================================
+-- 18. api_key - User API keys for external API and MCP access
+-- ============================================
+CREATE TABLE IF NOT EXISTS api_key (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  key_hash TEXT NOT NULL UNIQUE,
+  key_prefix TEXT NOT NULL,
+  last_used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_key_hash ON api_key(key_hash);
+
+ALTER TABLE api_key ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own api key" ON api_key
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own api key" ON api_key
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own api key" ON api_key
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own api key" ON api_key
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- ============================================
 -- Role grants (required for PostgREST + RLS to work)
 -- ============================================
 
@@ -669,6 +696,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON
   agency_client_custom_entries
 TO authenticated;
 
+GRANT SELECT, INSERT, UPDATE, DELETE ON api_key TO authenticated;
+
 -- service_role: full access (bypasses RLS via BYPASSRLS attribute)
 GRANT ALL ON
   profiles,
@@ -689,7 +718,8 @@ GRANT ALL ON
   agency_client_billing_settings,
   agency_manual_payments,
   agency_client_notes,
-  agency_client_custom_entries
+  agency_client_custom_entries,
+  api_key
 TO service_role;
 
 -- anon: read-only access to public/portal config tables

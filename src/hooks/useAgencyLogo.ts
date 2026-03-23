@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { usePortalRole } from '@/components/portal/usePortalRole';
 
 const AGENCY_LOGO_KEY = 'flowengine_agency_logo';
 
@@ -42,6 +43,7 @@ function getCachedLogoData(): CachedLogo | null {
  */
 export function useAgencyLogo() {
   const { user } = useAuth();
+  const { role, agencyId } = usePortalRole();
 
   // Initialize from localStorage directly to show agency logo immediately
   // This may cause a minor hydration warning but provides better UX
@@ -65,26 +67,28 @@ export function useAgencyLogo() {
       return;
     }
 
-    // Check if cache is for the current user
+    // For clients, fetch the agency's logo (whitelabel branding)
+    // For agency/free users, fetch their own logo
+    const profileId = (role === 'client' && agencyId) ? agencyId : user.id;
+
+    // Check if cache is for the current profile
     const cachedData = getCachedLogoData();
-    const cacheMatchesUser = cachedData?.userId === user.id;
+    const cacheMatchesUser = cachedData?.userId === profileId;
 
     if (!cacheMatchesUser) {
-      // Cache is for different user or doesn't exist
-      // Clear state and mark cache as invalid for this user
       setCacheValidForUser(false);
       setLogoUrl(null);
     } else {
       setCacheValidForUser(true);
     }
 
-    // Fetch fresh data for current user
+    // Fetch fresh data
     const fetchLogo = async () => {
       try {
         const { data: profile } = await supabase
           .from('profiles')
           .select('agency_logo_url, tier')
-          .eq('id', user.id)
+          .eq('id', profileId)
           .single();
 
         if (profile) {
@@ -92,11 +96,10 @@ export function useAgencyLogo() {
           setLogoUrl(url);
           setCacheValidForUser(true);
 
-          // Cache in localStorage
           try {
             localStorage.setItem(AGENCY_LOGO_KEY, JSON.stringify({
               url,
-              userId: user.id,
+              userId: profileId,
               timestamp: Date.now(),
             }));
           } catch {
@@ -109,7 +112,7 @@ export function useAgencyLogo() {
     };
 
     fetchLogo();
-  }, [user, isHydrated]);
+  }, [user, role, agencyId, isHydrated]);
 
   // Show logo if cache is confirmed valid for current user
   return { logoUrl: cacheValidForUser ? logoUrl : null, isProPlus };

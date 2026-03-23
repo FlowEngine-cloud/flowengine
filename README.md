@@ -59,13 +59,15 @@ Configure the portal itself:
 
 ---
 
-## Deploy (Docker Compose — includes self-hosted Supabase)
+## Deploy
 
-This is the recommended path. Everything runs in one stack — no external Supabase account needed.
+### Option 1: Docker Compose — build from source
+
+Everything runs in one stack — no external Supabase account needed.
 
 ```bash
-git clone https://github.com/FlowEngine-cloud/Flowengine.git
-cd Flowengine
+git clone https://github.com/FlowEngine-cloud/FlowEngne.git
+cd FlowEngne
 ./setup.sh
 ```
 
@@ -79,13 +81,71 @@ docker compose up -d --build
 
 Open `http://your-server:3000` (or your domain if using Traefik).
 
-### With a custom domain (Traefik / Coolify)
-
-Set `PORTAL_DOMAIN=portal.yourdomain.com` in `.env`. The stack includes Traefik labels for automatic HTTPS via Let's Encrypt.
+Set `PORTAL_DOMAIN=portal.yourdomain.com` in `.env` for automatic HTTPS via Let's Encrypt (requires Traefik).
 
 ---
 
-## Deploy (External Supabase)
+### Option 2: Pre-built Docker image (recommended for production)
+
+Uses the image published to `ghcr.io/flowengine-cloud/flowengne` — no build step, faster setup.
+
+```bash
+git clone https://github.com/FlowEngine-cloud/FlowEngne.git
+cd FlowEngne
+./setup.sh --prod
+```
+
+Or manually:
+
+```bash
+cp .env.docker .env   # edit .env first
+docker compose -f docker-compose.prod.yml up -d
+```
+
+**Updating:** Watchtower is included and checks for a new image every hour. It will pull and redeploy automatically. To update manually:
+
+```bash
+docker compose -f docker-compose.prod.yml pull portal
+docker compose -f docker-compose.prod.yml up -d portal
+```
+
+To pin a specific version, set `IMAGE_TAG=v1.2.3` in your `.env`.
+
+---
+
+### Option 3: Coolify
+
+1. In Coolify, create a new **Docker Compose** service
+2. Source: **GitHub** → `FlowEngine-cloud/FlowEngne`
+3. Compose file: `docker-compose.prod.yml`
+4. Add your environment variables from `.env.docker`
+5. Deploy
+
+Coolify will automatically redeploy when the `latest` image is updated (set **Watch for image changes** in the service settings).
+
+---
+
+### Option 4: Digital Ocean Droplet
+
+```bash
+# 1. Create a Droplet (Ubuntu 22.04, 2GB+ RAM recommended)
+# 2. SSH in and install Docker
+curl -fsSL https://get.docker.com | sh
+
+# 3. Clone and configure
+git clone https://github.com/FlowEngine-cloud/FlowEngne.git
+cd FlowEngne
+./setup.sh --prod
+
+# 4. Edit .env, then start
+docker compose -f docker-compose.prod.yml up -d
+```
+
+For HTTPS, point your domain to the Droplet IP and set `PORTAL_DOMAIN` in `.env` (requires a reverse proxy like Nginx Proxy Manager or Traefik).
+
+---
+
+### Option 5: External Supabase
 
 If you already have a Supabase project:
 
