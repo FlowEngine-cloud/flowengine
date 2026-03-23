@@ -36,7 +36,10 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
   const switchDemo = async (email: string, password: string) => {
     setSwitching(true);
-    await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (!error) {
+      router.refresh();
+    }
     setSwitching(false);
   };
 
@@ -54,7 +57,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
               <button
                 onClick={() => switchDemo(DEMO_CLIENT_EMAIL, DEMO_CLIENT_PASSWORD)}
                 disabled={switching}
-                className="underline underline-offset-2 hover:text-yellow-300 disabled:opacity-50 transition-colors"
+                className="text-white underline underline-offset-2 hover:text-white/70 disabled:opacity-50 transition-colors"
               >
                 {switching ? 'Switching…' : 'View as client →'}
               </button>
@@ -63,7 +66,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
               <button
                 onClick={() => switchDemo(DEMO_EMAIL, DEMO_PASSWORD)}
                 disabled={switching}
-                className="underline underline-offset-2 hover:text-yellow-300 disabled:opacity-50 transition-colors"
+                className="text-white underline underline-offset-2 hover:text-white/70 disabled:opacity-50 transition-colors"
               >
                 {switching ? 'Switching…' : '← View as admin'}
               </button>
