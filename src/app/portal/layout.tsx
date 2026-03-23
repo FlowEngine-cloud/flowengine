@@ -43,7 +43,13 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       setSwitchError(true);
       setTimeout(() => setSwitchError(false), 3000);
     } else {
-      router.refresh();
+      // Clear cached role and instances so the new user's role is detected fresh
+      try {
+        sessionStorage.removeItem('portal-role');
+        sessionStorage.removeItem('portal-hosting-instances-v2');
+        localStorage.removeItem('flowengine_agency_logo');
+      } catch {}
+      window.location.href = '/portal';
     }
     setSwitching(false);
   };
