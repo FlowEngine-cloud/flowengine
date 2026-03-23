@@ -36,7 +36,7 @@ export async function GET(
     const [{ data: accessibleInstance }, { data: clientInstance }] = await Promise.all([
       supabaseAdmin
         .from('pay_per_instance_deployments')
-        .select('id, instance_url, n8n_api_key')
+        .select('id, instance_url, n8n_api_key, is_external')
         .eq('id', instanceId)
         .or(`user_id.eq.${effectiveUserId},invited_by_user_id.eq.${effectiveUserId}`)
         .maybeSingle(),
@@ -44,7 +44,7 @@ export async function GET(
         .from('client_instances')
         .select(`
           id,
-          instance:pay_per_instance_deployments!inner(id, instance_url, n8n_api_key)
+          instance:pay_per_instance_deployments!inner(id, instance_url, n8n_api_key, is_external)
         `)
         .eq('instance_id', instanceId)
         .eq('invited_by', effectiveUserId)
@@ -55,7 +55,7 @@ export async function GET(
     let instance = accessibleInstance;
     if (!instance && clientInstance?.instance) {
       // Supabase join returns the object directly (not an array) with !inner
-      const instanceData = clientInstance.instance as unknown as { id: string; instance_url: string; n8n_api_key: string };
+      const instanceData = clientInstance.instance as unknown as { id: string; instance_url: string; n8n_api_key: string; is_external: boolean };
       instance = instanceData;
     }
 
@@ -70,7 +70,7 @@ export async function GET(
         .maybeSingle();
 
       if (dedicatedInstance) {
-        instance = dedicatedInstance;
+        instance = { ...dedicatedInstance, is_external: false };
       }
     }
 
@@ -81,6 +81,41 @@ export async function GET(
 
     if (!instance.n8n_api_key || !instance.instance_url) {
       return NextResponse.json({ workflows: [], message: 'API key not configured' });
+    }
+
+    // External/demo instance — return mock workflows without hitting real n8n
+    if ((instance as any).is_external) {
+      return NextResponse.json({
+        workflows: [
+          {
+            id: 'demo-wf-1',
+            name: 'Lead Qualification Agent',
+            active: true,
+            requiredCredentials: [
+              { type: 'openAiApi',     name: 'OpenAI'  },
+              { type: 'hubspotOAuth2', name: 'HubSpot' },
+            ],
+          },
+          {
+            id: 'demo-wf-2',
+            name: 'Customer Support Bot',
+            active: true,
+            requiredCredentials: [
+              { type: 'CUSTOM.flowEngineLlm', name: 'FlowEngine AI' },
+              { type: 'slackOAuth2',          name: 'Slack'         },
+            ],
+          },
+          {
+            id: 'demo-wf-3',
+            name: 'Data Sync to Sheets',
+            active: false,
+            requiredCredentials: [
+              { type: 'googleSheetsOAuth2', name: 'Google Sheets' },
+              { type: 'googleOAuth2',       name: 'Google'        },
+            ],
+          },
+        ],
+      });
     }
 
     // Fetch workflows from n8n using helper (handles SSL bypass)

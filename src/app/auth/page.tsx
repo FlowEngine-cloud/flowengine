@@ -43,6 +43,14 @@ export default function AuthPage() {
     await supabase.auth.signInWithPassword({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
     setDemoLoading(false);
   };
+
+  // Auto-login in demo mode
+  useEffect(() => {
+    if (DEMO_MODE && DEMO_EMAIL && DEMO_PASSWORD && !loading && !user) {
+      enterDemo();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
   const [logoUrl] = useState<string | null>(() => getCachedLogo());
   const [authConfig, setAuthConfig] = useState<AuthConfig | undefined>();
 
@@ -90,15 +98,20 @@ export default function AuthPage() {
         </span>
       </div>
       {DEMO_MODE && DEMO_EMAIL ? (
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm flex flex-col gap-4">
           <button
             onClick={enterDemo}
             disabled={demoLoading}
             className="w-full py-3 bg-white text-black font-semibold rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
           >
-            {demoLoading ? 'Entering demo...' : 'Try the demo'}
+            {demoLoading ? 'Signing in...' : 'Enter demo'}
           </button>
-          <p className="text-center text-xs text-white/30 mt-3">Read-only live demo</p>
+          <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/60 space-y-1">
+            <p className="text-white/30 text-xs uppercase tracking-wide mb-2">Demo credentials</p>
+            <p>Email: <span className="text-white/80 font-mono">{DEMO_EMAIL}</span></p>
+            <p>Password: <span className="text-white/80 font-mono">{DEMO_PASSWORD}</span></p>
+          </div>
+          <p className="text-center text-xs text-white/30">Read-only live demo</p>
         </div>
       ) : (
         <Auth

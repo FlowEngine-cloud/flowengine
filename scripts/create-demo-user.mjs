@@ -51,9 +51,15 @@ if (res.ok) {
   console.log(`  NEXT_PUBLIC_DEMO_MODE=true`);
   console.log(`  NEXT_PUBLIC_DEMO_EMAIL=${DEMO_EMAIL}`);
   console.log(`  NEXT_PUBLIC_DEMO_PASSWORD=${DEMO_PASSWORD}`);
-} else if (data.msg?.includes('already') || data.message?.includes('already') || res.status === 422) {
+} else if (
+  res.status === 422 ||
+  data.msg?.includes('already') ||
+  data.message?.includes('already') ||
+  data.error?.includes('already') ||
+  (res.status === 400 && Object.keys(data).length === 0)
+) {
   console.log(`ℹ️   User already exists: ${DEMO_EMAIL}`);
 } else {
-  console.error('❌  Failed:', JSON.stringify(data, null, 2));
+  console.error('❌  Failed:', JSON.stringify(data, null, 2), 'status:', res.status);
   process.exit(1);
 }

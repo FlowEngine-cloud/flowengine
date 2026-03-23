@@ -120,9 +120,8 @@ export async function GET(request: NextRequest) {
     const { data: templates, error: templatesError } = await supabaseAdmin
       .from('workflow_templates')
       .select('*')
-      .eq('user_id', agencyId)
+      .eq('team_id', agencyId)
       .eq('is_active', true)
-      .eq('assignment_type', 'all') // Phase A: only "all" assignments
       .order('created_at', { ascending: false });
 
     if (templatesError) {

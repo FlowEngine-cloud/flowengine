@@ -75,7 +75,7 @@ export async function GET(
 
     const { data: instance } = await supabaseAdmin
       .from('pay_per_instance_deployments')
-      .select('instance_url, n8n_api_key')
+      .select('instance_url, n8n_api_key, is_external')
       .eq('id', instanceId)
       .is('deleted_at', null)
       .maybeSingle();
@@ -100,6 +100,23 @@ export async function GET(
 
     if (!instanceUrl || !instanceApiKey) {
       return NextResponse.json({ executions: [], warning: 'Instance URL or API key not configured' });
+    }
+
+    // External/demo instance — return mock executions without hitting real n8n
+    if (instance?.is_external) {
+      const now = Date.now();
+      return NextResponse.json({
+        executions: [
+          { id: 'exec-1', workflowId: 'demo-wf-1', workflowName: 'Lead Qualification Agent', status: 'success', startedAt: new Date(now - 5   * 60 * 1000).toISOString() },
+          { id: 'exec-2', workflowId: 'demo-wf-2', workflowName: 'Customer Support Bot',      status: 'success', startedAt: new Date(now - 12  * 60 * 1000).toISOString() },
+          { id: 'exec-3', workflowId: 'demo-wf-1', workflowName: 'Lead Qualification Agent', status: 'running', startedAt: new Date(now - 2   * 60 * 1000).toISOString() },
+          { id: 'exec-4', workflowId: 'demo-wf-2', workflowName: 'Customer Support Bot',      status: 'error',   startedAt: new Date(now - 35  * 60 * 1000).toISOString() },
+          { id: 'exec-5', workflowId: 'demo-wf-3', workflowName: 'Data Sync to Sheets',       status: 'success', startedAt: new Date(now - 60  * 60 * 1000).toISOString() },
+          { id: 'exec-6', workflowId: 'demo-wf-1', workflowName: 'Lead Qualification Agent', status: 'success', startedAt: new Date(now - 90  * 60 * 1000).toISOString() },
+          { id: 'exec-7', workflowId: 'demo-wf-3', workflowName: 'Data Sync to Sheets',       status: 'success', startedAt: new Date(now - 120 * 60 * 1000).toISOString() },
+        ],
+        metrics: { total: 312, success: 298, failed: 12, running: 2 },
+      });
     }
 
     // Fetch recent executions from n8n using helper (handles SSL bypass)

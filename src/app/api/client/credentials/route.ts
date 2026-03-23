@@ -20,7 +20,7 @@ async function getInstanceWithAccess(instanceId: string, userId: string) {
   // Check pay-per-instance deployments first
   const { data: instance, error } = await supabaseAdmin
     .from('pay_per_instance_deployments')
-    .select('id, instance_url, n8n_api_key, user_id, invited_by_user_id, subscription_status')
+    .select('id, instance_url, n8n_api_key, user_id, invited_by_user_id, subscription_status, is_external')
     .eq('id', instanceId)
     .single();
 
@@ -124,6 +124,21 @@ export async function GET(request: NextRequest) {
     const { instance, error: accessError } = await getInstanceWithAccess(instanceId, effectiveUserId);
     if (accessError || !instance) {
       return NextResponse.json({ error: accessError || 'Access denied' }, { status: 403 });
+    }
+
+    // External/demo instance — return mock credentials without hitting real n8n
+    if ((instance as any).is_external) {
+      return NextResponse.json({
+        credentials: [
+          { id: 'cred-1', name: 'OpenAI Account',   type: 'openAiApi'           },
+          { id: 'cred-2', name: 'Google OAuth',      type: 'googleOAuth2'        },
+          { id: 'cred-3', name: 'Slack Workspace',   type: 'slackOAuth2'         },
+          { id: 'cred-4', name: 'HubSpot CRM',       type: 'hubspotOAuth2'       },
+          { id: 'cred-5', name: 'Google Sheets',     type: 'googleSheetsOAuth2'  },
+          { id: 'cred-6', name: 'FlowEngine AI',     type: 'CUSTOM.flowEngineLlm' },
+        ],
+        missing: [],
+      });
     }
 
     // Extract credentials from workflows - this is our source of truth

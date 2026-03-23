@@ -229,7 +229,7 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
     );
 
     const pendingInstances = filtered.filter(i => !i.is_external && (!i.service_type || i.deleted_at || i.status === 'pending_deploy')).sort((a, b) => a.instance_name.localeCompare(b.instance_name));
-    const n8nInstances = filtered.filter(i => !i.is_external && i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
+    const n8nInstances = filtered.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
     const openclawInstances = filtered.filter(i => !i.is_external && i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
     const websiteInstances = filtered.filter(i => !i.is_external && (i.service_type === 'docker' || i.service_type === 'website') && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
 
