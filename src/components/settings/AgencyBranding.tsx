@@ -87,6 +87,12 @@ export function AgencyBranding() {
     setMessage(null);
 
     try {
+      // Ensure bucket exists (handles deployments where db-migrate ran before storage was ready)
+      await fetch('/api/storage/ensure-bucket', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
       // Upload to Supabase storage (dedicated agency-branding bucket)
       const fileExt = file.name.split('.').pop();
       const fileName = `${user?.id}-${Date.now()}.${fileExt}`;

@@ -119,6 +119,12 @@ services:
     volumes:
       - storage_data:/var/lib/storage
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
   # ============================================
   # Realtime - WebSocket subscriptions
@@ -181,6 +187,8 @@ services:
         condition: service_healthy
       auth:
         condition: service_started
+      storage:
+        condition: service_healthy
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD}
     volumes:
@@ -188,7 +196,6 @@ services:
       - ./migrations/seed.sql:/migrations/99-seed.sql
     command: >
       bash -c "
-        sleep 5 &&
         psql -h postgres -U supabase_admin -d postgres -f /migrations/01-schema.sql || true &&
         psql -h postgres -U supabase_admin -d postgres -f /migrations/99-seed.sql || true &&
         psql -h postgres -U supabase_admin -d postgres -c \"NOTIFY pgrst, 'reload schema';\" || true
