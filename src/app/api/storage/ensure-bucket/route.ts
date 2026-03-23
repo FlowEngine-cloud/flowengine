@@ -3,10 +3,15 @@
  *
  * Ensures the agency-branding storage bucket exists.
  * Called client-side before the first logo upload to handle deployments
- * where the db-migrate container ran before storage initialized its schema.
+ * where the db-migrate container ran before storage-api initialized its schema.
+ *
+ * Uses PostgREST (storage schema exposed via PGRST_DB_SCHEMAS) so it works
+ * even if the storage-api service hasn't fully started yet.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+
+const BUCKET_ID = 'agency-branding';
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,23 +26,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    // Check if bucket already exists
-    const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets();
-    if (listError) throw listError;
+    // Check existence via PostgREST (direct DB access, no storage-api dependency)
+    const { data: existing } = await (supabaseAdmin as any)
+      .schema('storage')
+      .from('buckets')
+      .select('id')
+      .eq('id', BUCKET_ID)
+      .maybeSingle();
 
-    const exists = buckets?.some(b => b.id === 'agency-branding');
-    if (exists) {
+    if (existing) {
       return NextResponse.json({ ok: true, created: false });
     }
 
-    // Create the bucket
-    const { error: createError } = await supabaseAdmin.storage.createBucket('agency-branding', {
-      public: true,
-      fileSizeLimit: 2097152,
-      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'],
-    });
+    // Insert bucket directly via PostgREST
+    const { error: insertError } = await (supabaseAdmin as any)
+      .schema('storage')
+      .from('buckets')
+      .insert({
+        id: BUCKET_ID,
+        name: BUCKET_ID,
+        public: true,
+        file_size_limit: 2097152,
+        allowed_mime_types: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'],
+      });
 
-    if (createError) throw createError;
+    if (insertError) throw insertError;
 
     return NextResponse.json({ ok: true, created: true });
   } catch (err: any) {
