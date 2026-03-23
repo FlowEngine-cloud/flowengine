@@ -79,7 +79,7 @@ Edit `.env` with your domain and passwords, then:
 docker compose up -d --build
 ```
 
-Open `http://your-server:3000` (or your domain if using Traefik).
+Open `http://your-server:3001` (or your domain if using Traefik).
 
 Set `PORTAL_DOMAIN=portal.yourdomain.com` in `.env` for automatic HTTPS via Let's Encrypt (requires Traefik).
 
