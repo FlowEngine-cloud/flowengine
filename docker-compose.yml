@@ -187,10 +187,13 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./migrations/supabase-schema.sql:/migrations/01-schema.sql
+      - ./migrations/storage-init.sql:/migrations/02-storage.sql
       - ./migrations/seed.sql:/migrations/99-seed.sql
     command: >
       bash -c "
+        sleep 10 &&
         psql -h postgres -U supabase_admin -d postgres -f /migrations/01-schema.sql || true &&
+        psql -h postgres -U supabase_admin -d postgres -f /migrations/02-storage.sql &&
         psql -h postgres -U supabase_admin -d postgres -f /migrations/99-seed.sql || true &&
         psql -h postgres -U supabase_admin -d postgres -c \"NOTIFY pgrst, 'reload schema';\" || true
       "
