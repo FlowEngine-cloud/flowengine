@@ -32,7 +32,7 @@ function setCache(data: Omit<PortalRoleInfo, 'loading'>) {
 }
 
 export function usePortalRole(): PortalRoleInfo {
-  const { user, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
   const cached = getCache();
   const [info, setInfo] = useState<Omit<PortalRoleInfo, 'loading'>>(() => cached || {
     role: 'free',
@@ -42,9 +42,9 @@ export function usePortalRole(): PortalRoleInfo {
   const [loading, setLoading] = useState(!cached);
 
   const detect = useCallback(async () => {
-    if (!user) return;
+    if (!user || !session?.access_token) return;
 
-    const [ownedResult, membershipResult, clientResult, teamResult] = await Promise.all([
+    const [ownedResult, membershipResult, clientCheckRes, teamResult] = await Promise.all([
       // Check if user owns any pay-per-instance
       supabase
         .from('pay_per_instance_deployments')
@@ -59,11 +59,10 @@ export function usePortalRole(): PortalRoleInfo {
         .eq('user_id', user.id)
         .neq('status', 'deleted')
         .limit(1),
-      // Check if user is a client on any instance
-      supabase
-        .from('client_instances')
-        .select('instance_id, invited_by')
-        .eq('user_id', user.id),
+      // Check if user is a client — uses server-side route to bypass client_instances RLS
+      fetch('/api/portal/client-check', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      }).then(r => r.json()).catch(() => ({ isClient: false, instances: [] })),
       // Check if user is a team member of an agency owner
       supabase
         .from('team_members')
@@ -75,8 +74,8 @@ export function usePortalRole(): PortalRoleInfo {
 
     const ownsInstances = (ownedResult.data?.length ?? 0) > 0 || (membershipResult.data?.length ?? 0) > 0;
     const isTeamMember = (teamResult.data?.length ?? 0) > 0;
-    const clientLinks = clientResult.data || [];
-    const isClient = clientLinks.length > 0;
+    const clientLinks: { instance_id: string; invited_by: string }[] = clientCheckRes.instances || [];
+    const isClient = clientCheckRes.isClient === true;
 
     let role: PortalRole = 'free';
     let agencyId: string | null = null;
