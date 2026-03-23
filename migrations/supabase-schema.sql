@@ -798,6 +798,7 @@ END;
 $$;
 
 -- Grants so storage-api, PostgREST, and service_role can all access storage tables
+GRANT USAGE ON SCHEMA storage TO authenticated, anon, service_role, supabase_storage_admin;
 GRANT ALL ON storage.migrations TO supabase_storage_admin;
 GRANT ALL ON storage.buckets TO supabase_storage_admin;
 GRANT ALL ON storage.objects TO supabase_storage_admin;
