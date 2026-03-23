@@ -142,6 +142,7 @@ CREATE TABLE IF NOT EXISTS pay_per_instance_deployments (
   service_type TEXT DEFAULT 'n8n',
   is_external BOOLEAN DEFAULT false,
   n8n_api_key TEXT,
+  ai_payer TEXT DEFAULT 'agency' CHECK (ai_payer IN ('agency', 'client')),
   deleted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

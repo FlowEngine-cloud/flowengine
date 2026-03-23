@@ -106,6 +106,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
   const [removingClient, setRemovingClient] = useState(false);
   // AI tokens tab state - client-level budget + client-level payer
   const [clientBudget, setClientBudget] = useState<{ tokensRemaining: number; tokensUsed: number } | null>(null);
+  const [feConnected, setFeConnected] = useState(false);
   const [budgetLoading, setBudgetLoading] = useState(false);
   const [budgetLoaded, setBudgetLoaded] = useState(false);
   const [budgetRefreshing, setBudgetRefreshing] = useState(false);
@@ -244,6 +245,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
           tokensRemaining: data.budget.tokensRemaining,
           tokensUsed: data.budget.tokensUsed,
         });
+        setFeConnected(data.feConnected ?? false);
       }
       if (!isRefresh) setBudgetLoaded(true);
     } catch { /* silent */ } finally {
@@ -2173,6 +2175,28 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
 
   // ─── AI Tokens tab ─────────────────────────────────────────────────────────
   if (activeTab === 'ai_tokens') {
+    if (!budgetLoading && !feConnected) {
+      return (
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-3xl mx-auto p-4 md:p-6">
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 flex flex-col items-center gap-4 text-center">
+              <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                <CreditCard className="h-6 w-6 text-purple-400/60" />
+              </div>
+              <div>
+                <p className="text-base font-medium text-white mb-1">FlowEngine not connected</p>
+                <p className="text-sm text-white/40 max-w-sm">
+                  Connect your FlowEngine API key in{' '}
+                  <span className="text-white/60">Settings → Connections</span>{' '}
+                  to enable AI token tracking for clients.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     const purchaseTokens = Math.floor(parseFloat(topupAmount || '0') * 20000);
     const nonExternalInstances = realInstances.filter(i => !i.is_external);
     const canSwitchToClient = Object.values(instanceAiData).filter(d => !d.isExternal).every(d => d.hasLinkedClient);
