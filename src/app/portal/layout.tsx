@@ -23,6 +23,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const router = useRouter();
   const { role, agencyId, loading: roleLoading } = usePortalRole();
   const [switching, setSwitching] = useState(false);
+  const [switchError, setSwitchError] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -36,8 +37,12 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
   const switchDemo = async (email: string, password: string) => {
     setSwitching(true);
+    setSwitchError(false);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (!error) {
+    if (error) {
+      setSwitchError(true);
+      setTimeout(() => setSwitchError(false), 3000);
+    } else {
       router.refresh();
     }
     setSwitching(false);
@@ -52,7 +57,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       <div className="h-screen bg-black flex flex-col">
         {IS_DEMO && (
           <div className="flex-shrink-0 bg-yellow-500/10 border-b border-yellow-500/20 px-4 py-2 flex items-center justify-center gap-3 text-xs text-yellow-400">
-            <span>This is a live demo — changes are disabled.</span>
+            <span>{switchError ? 'Login failed — client user not set up yet.' : 'This is a live demo — changes are disabled.'}</span>
             {canSwitchToClient && (
               <button
                 onClick={() => switchDemo(DEMO_CLIENT_EMAIL, DEMO_CLIENT_PASSWORD)}
