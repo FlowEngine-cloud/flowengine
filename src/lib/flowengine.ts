@@ -188,6 +188,11 @@ class FlowEngineClient {
     return this.request('POST', `/api/v1/n8n/instances/${id}/manage`, { action });
   }
 
+  /** Fetch recent logs for a managed n8n instance */
+  async getInstanceLogs(id: string, lines = 300): Promise<{ success: boolean; logs: string }> {
+    return this.request('GET', `/api/v1/n8n/instances/${id}/logs?lines=${lines}`);
+  }
+
   // ==========================================
   // WhatsApp Sessions
   // ==========================================

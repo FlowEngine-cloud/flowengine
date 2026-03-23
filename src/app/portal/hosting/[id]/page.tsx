@@ -21,6 +21,71 @@ function ServiceIcon({ serviceType, className = 'w-5 h-5' }: { serviceType?: str
   return <Server className={className + ' text-white/30'} />;
 }
 
+// ─── Shared Logs Section ─────────────────────────────────────────────────────
+
+function LogsSection({ instanceId, logsUrl, token }: { instanceId: string; logsUrl: string; token: string }) {
+  const [open, setOpen] = useState(false);
+  const [logs, setLogs] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchLogs = async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${logsUrl}?lines=300`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setLogs(await res.text());
+    } catch {
+      setLogs('Failed to fetch logs.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden">
+      <button
+        onClick={() => {
+          const next = !open;
+          setOpen(next);
+          if (next && logs === null) fetchLogs();
+        }}
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-800/30 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Terminal className="w-4 h-4 text-white/60" />
+          <span className="text-sm font-medium text-white">Logs</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {open && (
+            <button
+              onClick={e => { e.stopPropagation(); fetchLogs(); }}
+              className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-gray-200 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <ChevronRight className={`w-4 h-4 text-white/30 transition-transform ${open ? 'rotate-90' : ''}`} />
+        </div>
+      </button>
+      {open && (
+        <div className="border-t border-gray-800">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin text-white/30" />
+            </div>
+          ) : (
+            <pre className="p-4 text-sm text-green-400 font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto bg-black/30">
+              {logs || '(no logs)'}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── FlowEngine Instance Detail ──────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string; spin?: boolean; pulse?: boolean }> = {
@@ -273,6 +338,9 @@ function FlowEngineInstanceDetail({ instance, onDeleted }: { instance: PortalIns
           {actionError && <p className="mt-3 text-sm text-red-400">{actionError}</p>}
         </div>
 
+        {/* Logs */}
+        <LogsSection instanceId={instance.id} logsUrl={`/api/flowengine/instances/${instance.id}/logs`} token={session?.access_token ?? ''} />
+
         {/* Danger zone */}
         <div className="bg-gray-900/50 border border-red-800 rounded-lg p-5">
           <p className="text-sm font-medium text-white mb-1">Danger Zone</p>
@@ -441,7 +509,7 @@ function WebsiteInstanceDetail({ instance, onDeleted }: { instance: PortalInstan
     setDeleting(true);
     setDeleteError(null);
     try {
-      const res = await fetch(`/api/n8n/instances/${instance.id}`, {
+      const res = await fetch(`/api/docker/instance?instanceId=${instance.id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
