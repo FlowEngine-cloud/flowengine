@@ -2370,7 +2370,7 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
               href={`/portal/${instance.id}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-3 py-2 text-sm text-white/60 hover:text-white bg-gray-900/50 border border-gray-800 hover:border-gray-700 rounded-lg transition-colors"
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-white text-black hover:bg-gray-100 rounded-lg font-semibold transition-all"
             >
               <ExternalLink className="w-3.5 h-3.5 shrink-0" />
               Client Portal
@@ -2382,7 +2382,7 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
                 href={instance.instance_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 px-3 py-2 text-sm text-white/60 hover:text-white bg-gray-900/50 border border-gray-800 hover:border-gray-700 rounded-lg transition-colors"
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm border border-gray-700 hover:bg-gray-700 text-white/60 rounded-lg font-medium transition-colors"
               >
                 <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                 n8n Management

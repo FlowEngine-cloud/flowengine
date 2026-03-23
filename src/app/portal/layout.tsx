@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthContext';
 import { BrandedLoadingSpinner } from '@/components/ui/loading-logo';
@@ -9,20 +9,36 @@ import { usePortalRole } from '@/components/portal/usePortalRole';
 import PortalSidebar from '@/components/portal/PortalSidebar';
 import PortalMobileHeader from '@/components/portal/PortalMobileHeader';
 import { PortalRoleContext } from './context';
+import { supabase } from '@/lib/supabase';
 
 const IS_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+const DEMO_EMAIL = process.env.NEXT_PUBLIC_DEMO_EMAIL || '';
+const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD || '';
+const DEMO_CLIENT_EMAIL = process.env.NEXT_PUBLIC_DEMO_CLIENT_EMAIL || '';
+const DEMO_CLIENT_PASSWORD = process.env.NEXT_PUBLIC_DEMO_CLIENT_PASSWORD || '';
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth();
   const { logoUrl } = useAgencyLogo();
   const router = useRouter();
   const { role, agencyId, loading: roleLoading } = usePortalRole();
+  const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace('/auth');
     }
   }, [authLoading, user, router]);
+
+  const isClientView = IS_DEMO && DEMO_CLIENT_EMAIL && user?.email === DEMO_CLIENT_EMAIL;
+  const canSwitchToClient = IS_DEMO && DEMO_CLIENT_EMAIL && DEMO_CLIENT_PASSWORD && !isClientView;
+  const canSwitchToAdmin = IS_DEMO && DEMO_EMAIL && DEMO_PASSWORD && isClientView;
+
+  const switchDemo = async (email: string, password: string) => {
+    setSwitching(true);
+    await supabase.auth.signInWithPassword({ email, password });
+    setSwitching(false);
+  };
 
   if (authLoading || !user) {
     return <BrandedLoadingSpinner logoUrl={logoUrl} />;
@@ -32,8 +48,26 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     <PortalRoleContext.Provider value={{ role, agencyId, loading: roleLoading }}>
       <div className="h-screen bg-black flex flex-col">
         {IS_DEMO && (
-          <div className="flex-shrink-0 bg-yellow-500/10 border-b border-yellow-500/20 px-4 py-2 text-center text-xs text-yellow-400">
-            This is a live demo — changes are disabled.
+          <div className="flex-shrink-0 bg-yellow-500/10 border-b border-yellow-500/20 px-4 py-2 flex items-center justify-center gap-3 text-xs text-yellow-400">
+            <span>This is a live demo — changes are disabled.</span>
+            {canSwitchToClient && (
+              <button
+                onClick={() => switchDemo(DEMO_CLIENT_EMAIL, DEMO_CLIENT_PASSWORD)}
+                disabled={switching}
+                className="underline underline-offset-2 hover:text-yellow-300 disabled:opacity-50 transition-colors"
+              >
+                {switching ? 'Switching…' : 'View as client →'}
+              </button>
+            )}
+            {canSwitchToAdmin && (
+              <button
+                onClick={() => switchDemo(DEMO_EMAIL, DEMO_PASSWORD)}
+                disabled={switching}
+                className="underline underline-offset-2 hover:text-yellow-300 disabled:opacity-50 transition-colors"
+              >
+                {switching ? 'Switching…' : '← View as admin'}
+              </button>
+            )}
           </div>
         )}
         {/* Mobile header */}
