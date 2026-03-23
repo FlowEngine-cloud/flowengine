@@ -213,6 +213,7 @@ services:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
       NEXT_PUBLIC_APP_URL: ${SITE_URL:-http://localhost:3000}
+      ENCRYPTION_SECRET: ${ENCRYPTION_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
