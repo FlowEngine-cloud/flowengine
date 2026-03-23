@@ -117,18 +117,20 @@ export default function SecondaryPanel({ sections, selectedId, onSelect, action,
           .limit(10),
         supabase
           .from('client_invites')
-          .select('id, email, accepted_by')
+          .select('id, email, name, accepted_by')
           .eq('invited_by', user.id)
-          .ilike('email', pattern)
+          .or(`email.ilike.${pattern},name.ilike.${pattern}`)
           .limit(10),
         supabase
           .from('workflow_templates')
           .select('id, name, category')
+          .or(`team_id.eq.${user.id},created_by.eq.${user.id}`)
           .ilike('name', pattern)
           .limit(10),
         supabase
           .from('client_widgets')
           .select('id, name, widget_type')
+          .or(`user_id.eq.${user.id},team_id.eq.${user.id}`)
           .ilike('name', pattern)
           .limit(10),
       ]);
@@ -141,8 +143,8 @@ export default function SecondaryPanel({ sections, selectedId, onSelect, action,
             }))
           : [],
         clients: clientRes.status === 'fulfilled' && clientRes.value.data
-          ? clientRes.value.data.map((c: { id: string; email: string; accepted_by?: string }) => ({
-              id: c.accepted_by || c.id, label: c.email,
+          ? clientRes.value.data.map((c: { id: string; email: string; name?: string; accepted_by?: string }) => ({
+              id: c.accepted_by || c.id, label: c.name || c.email, sublabel: c.name ? c.email : undefined,
               href: c.accepted_by ? `/portal/clients/${c.accepted_by}` : '/portal/clients',
               type: 'client' as const,
             }))
