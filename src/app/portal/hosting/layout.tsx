@@ -18,12 +18,6 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
   const router = useRouter();
   const pathname = usePathname();
 
-  // Route guard: clients access instances through sidebar, not hosting page
-  useEffect(() => {
-    if (!roleLoading && role === 'client') {
-      router.replace('/portal');
-    }
-  }, [role, roleLoading, router]);
 
   const [deployOpen, setDeployOpen] = useState(false);
   const [deploying, setDeploying] = useState(false);
@@ -116,8 +110,7 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
     });
   }, [loading, instances, session?.access_token]);
 
-  // Route guard: clients access instances through sidebar, not hosting page
-  if (role === 'client') return null;
+  const isClient = role === 'client';
 
   // Determine selected item from pathname
   const afterHosting = pathname?.split('/portal/hosting/')[1] || '';
@@ -317,7 +310,7 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
             selectedId={selectedId}
             onSelect={handleSelect}
             searchPlaceholder="Search instances..."
-            action={
+            action={isClient ? undefined : (
               <div className="space-y-2">
                 <SearchableSelect
                   value={clientFilter}
@@ -332,7 +325,7 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
                   Deploy
                 </button>
               </div>
-            }
+            )}
           />
         )}
       </div>
