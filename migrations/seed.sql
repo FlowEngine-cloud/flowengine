@@ -9,3 +9,30 @@ INSERT INTO workflow_templates (name, description, category, is_public, workflow
   ('Daily Report Generator', 'Generate and email a daily summary report from your database.', 'Reporting', true, '{"nodes": [], "connections": {}}'),
   ('Invoice Automation', 'Create and send invoices automatically when a project milestone is completed.', 'Finance', true, '{"nodes": [], "connections": {}}')
 ON CONFLICT DO NOTHING;
+
+-- Storage bucket for agency branding (logo uploads)
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'agency-branding',
+  'agency-branding',
+  true,
+  2097152,
+  ARRAY['image/jpeg','image/png','image/gif','image/webp','image/svg+xml']
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- Allow authenticated users to upload/update/delete their own logos
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'agency_branding_upload' AND tablename = 'objects' AND schemaname = 'storage') THEN
+    CREATE POLICY agency_branding_upload ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'agency-branding');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'agency_branding_update' AND tablename = 'objects' AND schemaname = 'storage') THEN
+    CREATE POLICY agency_branding_update ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'agency-branding');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'agency_branding_delete' AND tablename = 'objects' AND schemaname = 'storage') THEN
+    CREATE POLICY agency_branding_delete ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'agency-branding');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'agency_branding_public_read' AND tablename = 'objects' AND schemaname = 'storage') THEN
+    CREATE POLICY agency_branding_public_read ON storage.objects FOR SELECT TO public USING (bucket_id = 'agency-branding');
+  END IF;
+END $$;
