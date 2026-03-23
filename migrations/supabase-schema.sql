@@ -12,6 +12,55 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================
+-- Storage schema (pre-created so storage-api finds tables on startup)
+-- ============================================
+CREATE TABLE IF NOT EXISTS storage.migrations (
+  id          integer      NOT NULL,
+  name        varchar(100) NOT NULL,
+  hash        varchar(40)  NOT NULL,
+  executed_at timestamp    DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS storage.buckets (
+  id                 text        NOT NULL PRIMARY KEY,
+  name               text        NOT NULL,
+  owner              uuid,
+  created_at         timestamptz DEFAULT now(),
+  updated_at         timestamptz DEFAULT now(),
+  public             boolean     DEFAULT false,
+  avif_autodetection boolean     DEFAULT false,
+  file_size_limit    bigint,
+  allowed_mime_types text[],
+  owner_id           text
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS bname ON storage.buckets USING btree (name);
+
+CREATE TABLE IF NOT EXISTS storage.objects (
+  id               uuid        NOT NULL DEFAULT uuid_generate_v4() PRIMARY KEY,
+  bucket_id        text        REFERENCES storage.buckets ON DELETE CASCADE,
+  name             text,
+  owner            uuid,
+  created_at       timestamptz DEFAULT now(),
+  updated_at       timestamptz DEFAULT now(),
+  last_accessed_at timestamptz DEFAULT now(),
+  metadata         jsonb,
+  path_tokens      text[]      GENERATED ALWAYS AS (string_to_array(name, '/')) STORED,
+  version          text,
+  owner_id         text,
+  user_metadata    jsonb
+);
+
+CREATE INDEX IF NOT EXISTS name_prefix_search ON storage.objects USING btree (name text_pattern_ops);
+
+GRANT USAGE ON SCHEMA storage TO authenticated, anon, service_role, supabase_storage_admin;
+GRANT ALL   ON storage.migrations TO supabase_storage_admin;
+GRANT ALL   ON storage.buckets    TO supabase_storage_admin, service_role;
+GRANT ALL   ON storage.objects    TO supabase_storage_admin, service_role;
+GRANT SELECT ON storage.buckets   TO authenticated, anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON storage.objects TO authenticated, anon;
+
+-- ============================================
 -- 1. profiles - User profiles (linked to auth.users)
 -- ============================================
 CREATE TABLE IF NOT EXISTS profiles (
@@ -727,86 +776,6 @@ TO service_role;
 GRANT SELECT ON portal_settings, widget_categories TO anon;
 
 -- ============================================
--- Storage schema (pre-initialized for storage-api compatibility)
--- storage-api creates these at startup, but we pre-create them to avoid
--- race conditions. Uses IF NOT EXISTS so storage-api migrations are safe no-ops.
--- ============================================
-
-CREATE TABLE IF NOT EXISTS storage.migrations (
-  id integer NOT NULL,
-  name varchar(100) NOT NULL,
-  hash varchar(40) NOT NULL,
-  executed_at timestamp DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS storage.buckets (
-  id text NOT NULL PRIMARY KEY,
-  name text NOT NULL,
-  owner uuid,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  public boolean DEFAULT false,
-  avif_autodetection boolean DEFAULT false,
-  file_size_limit bigint,
-  allowed_mime_types text[],
-  owner_id text
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS bname ON storage.buckets USING btree (name);
-
-CREATE TABLE IF NOT EXISTS storage.objects (
-  id uuid NOT NULL DEFAULT uuid_generate_v4() PRIMARY KEY,
-  bucket_id text REFERENCES storage.buckets ON DELETE CASCADE,
-  name text,
-  owner uuid,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  last_accessed_at timestamptz DEFAULT now(),
-  metadata jsonb,
-  path_tokens text[] GENERATED ALWAYS AS (string_to_array(name, '/')) STORED,
-  version text,
-  owner_id text,
-  user_metadata jsonb
-);
-
-CREATE INDEX IF NOT EXISTS name_prefix_search ON storage.objects USING btree (name text_pattern_ops);
-
-CREATE OR REPLACE FUNCTION storage.foldername(name text)
-RETURNS text[] LANGUAGE plpgsql AS $$
-BEGIN
-  RETURN string_to_array(name, '/');
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION storage.filename(name text)
-RETURNS text LANGUAGE plpgsql AS $$
-DECLARE _parts text[];
-BEGIN
-  SELECT string_to_array(name, '/') INTO _parts;
-  RETURN _parts[array_length(_parts,1)];
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION storage.extension(name text)
-RETURNS text LANGUAGE plpgsql AS $$
-DECLARE _parts text[]; _filename text;
-BEGIN
-  SELECT string_to_array(name, '/') INTO _parts;
-  _filename := _parts[array_length(_parts,1)];
-  RETURN reverse(split_part(reverse(_filename), '.', 1));
-END;
-$$;
-
--- Grants so storage-api, PostgREST, and service_role can all access storage tables
-GRANT USAGE ON SCHEMA storage TO authenticated, anon, service_role, supabase_storage_admin;
-GRANT ALL ON storage.migrations TO supabase_storage_admin;
-GRANT ALL ON storage.buckets TO supabase_storage_admin;
-GRANT ALL ON storage.objects TO supabase_storage_admin;
-GRANT ALL ON storage.buckets TO service_role;
-GRANT ALL ON storage.objects TO service_role;
-GRANT SELECT ON storage.buckets TO authenticated, anon;
-GRANT SELECT, INSERT, UPDATE, DELETE ON storage.objects TO authenticated, anon;
-
 -- ============================================
 -- Done! Your FlowEngine Portal database is ready.
 -- ============================================
