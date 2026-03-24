@@ -465,11 +465,13 @@ CREATE POLICY "Users can view own deployments" ON pay_per_instance_deployments F
 CREATE POLICY "Users can manage own deployments" ON pay_per_instance_deployments FOR ALL
   USING (user_id = auth.uid());
 
--- Client instances: team-scoped access
+-- Client instances: team-scoped access (agency side) + client can read own assignments
 CREATE POLICY "Team can view client instances" ON client_instances FOR SELECT
   USING (team_id IN (SELECT team_id FROM profiles WHERE id = auth.uid()));
 CREATE POLICY "Team can manage client instances" ON client_instances FOR ALL
   USING (team_id IN (SELECT team_id FROM profiles WHERE id = auth.uid()));
+CREATE POLICY "Client can view own instance assignments" ON client_instances FOR SELECT
+  USING (user_id = auth.uid());
 
 -- Client invites: agency-scoped access
 CREATE POLICY "Agency can view sent invites" ON client_invites FOR SELECT USING (invited_by = auth.uid());
