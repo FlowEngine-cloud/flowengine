@@ -11,7 +11,7 @@ import PortalMobileHeader from '@/components/portal/PortalMobileHeader';
 import { PortalRoleContext } from './context';
 import { supabase } from '@/lib/supabase';
 
-const IS_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+const IS_DEMO = false;
 const DEMO_EMAIL = process.env.NEXT_PUBLIC_DEMO_EMAIL || '';
 const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD || '';
 const DEMO_CLIENT_EMAIL = process.env.NEXT_PUBLIC_DEMO_CLIENT_EMAIL || '';
