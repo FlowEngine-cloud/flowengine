@@ -1623,7 +1623,7 @@ function ExternalInstanceDetail({ instance, onDeleted }: { instance: PortalInsta
   );
 }
 
-type ServiceType = 'n8n' | 'openclaw' | 'docker';
+type ServiceType = 'n8n' | 'openclaw' | 'website';
 
 const AI_PROVIDER_URL = process.env.NEXT_PUBLIC_AI_PROVIDER_URL || process.env.NEXT_PUBLIC_AI_BASE_URL || 'https://openrouter.ai/api';
 
@@ -1647,8 +1647,8 @@ const deploymentTypes = [
     available: true,
   },
   {
-    id: 'docker' as ServiceType,
-    label: 'Docker Container',
+    id: 'website' as ServiceType,
+    label: 'Website',
     description: 'Deploy any Docker image with a public URL.',
     iconSrc: null as string | null,
     iconClass: '',
@@ -1802,7 +1802,7 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
         body.channelTokens = {};
       }
 
-      if (selectedService === 'docker') {
+      if (selectedService === 'website') {
         if (!dockerImage.trim()) {
           setDeployError('Docker image is required.');
           setDeploying(false);
@@ -1927,7 +1927,7 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
                 <div className="w-10 h-10 bg-gray-800/30 rounded-lg flex items-center justify-center shrink-0">
                   {dt.iconSrc
                     ? <img src={dt.iconSrc} className={dt.iconClass} alt={dt.label} style={dt.iconStyle} />
-                    : dt.id === 'docker'
+                    : dt.id === 'website'
                       ? <Globe className="w-5 h-5 text-white/60" />
                       : <Server className="w-5 h-5 text-white/30" />
                   }
@@ -1954,7 +1954,7 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
           })}
         </div>
 
-        {selectedService === 'docker' && (
+        {selectedService === 'website' && (
           <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 space-y-3">
             <div>
               <label className="text-sm text-white/60 mb-1.5 block">Docker Image</label>
@@ -1990,7 +1990,7 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
         {selectedService && (
           <button
             onClick={handleDeploy}
-            disabled={deploying || (selectedService === 'docker' && !dockerImage.trim())}
+            disabled={deploying || (selectedService === 'website' && !dockerImage.trim())}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-black hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {deploying ? (
