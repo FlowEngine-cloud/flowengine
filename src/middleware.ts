@@ -16,8 +16,9 @@ const DEMO_ALLOWLIST = [
 ];
 
 export function middleware(req: NextRequest) {
-  // Check per-request so runtime env var changes take effect without rebuild
-  if (process.env.DEMO_MODE !== 'true') return NextResponse.next();
+  // Use bracket notation to prevent Next.js Edge bundler from statically inlining the value
+  const env = process.env as Record<string, string | undefined>;
+  if (env['DEMO_MODE'] !== 'true') return NextResponse.next();
 
   const { pathname } = req.nextUrl;
   const { method } = req;
