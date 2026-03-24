@@ -78,7 +78,7 @@ Each client account can also have team members (e.g. multiple people in the clie
 | **Clients** | ✅ | ❌ | ❌ |
 | **Templates** | ✅ | ❌ | ❌ |
 | **Embeds** (UI Studio) | ✅ | ❌ | ❌ |
-| **Settings** | ✅ | ❌ | ❌ |
+| **Settings** | ✅ | ✅ (Account tab only) | ✅ (Account tab only) |
 
 **Note:** Company `member` role sees all nav items but most actions within each page are disabled/hidden.
 
@@ -193,15 +193,15 @@ Clients can never access this page. Only company users see it.
 
 ---
 
-## 11. Settings Page (Company only)
+## 11. Settings Page
 
-Clients never see the Settings nav item or page.
+All roles (company and client) see the Settings nav item. Clients are restricted to the **Account tab only** — any attempt to navigate to other tabs redirects them back to Account. Company users see all tabs.
 
 ### Settings Tab: Account
 
-| Section | Contents | All company roles |
-|---|---|---|
-| Account Settings | Display name, email, password, avatar | ✅ (own account only) |
+| Section | Contents | All company roles | All client roles |
+|---|---|---|---|
+| Account Settings | Display name, email, password, avatar | ✅ (own account only) | ✅ (own account only) |
 
 ### Settings Tab: Company
 
@@ -305,12 +305,15 @@ Calls the Supabase RPC `get_effective_owner_id` which returns:
 
 ---
 
-## 15. Known Gaps (Currently Broken / Not Yet Implemented)
+## 15. Known Gaps
 
-| Issue | Impact | Fix needed |
-|---|---|---|
-| `/api/portal/branding` endpoint missing | Clients always see default FlowEngine logo/name instead of agency branding | Create endpoint that looks up `client_instances.invited_by` → fetches agency `profiles` |
-| `usePortalRole` does not distinguish full vs simplified client | Sidebar shows only Manage for ALL clients | Add `allowFullAccess` to role info; check `client_instances.allow_full_access` |
-| Sidebar shows only Manage for clients | Full access clients cannot navigate to Hosting or Services | Filter sidebar items based on `allowFullAccess` flag |
-| Services layout blocks ALL clients | Full access clients get redirected to `/portal` when visiting Services | Change guard to only redirect simplified clients |
-| Hosting layout: Deploy button hidden but accessible to all clients | Full access clients can view Hosting but not simplified clients — correct for now but no guard | Add guard to redirect simplified clients |
+No outstanding access control gaps. All previously identified issues have been resolved:
+
+| Issue | Status |
+|---|---|
+| `/api/portal/branding` endpoint | ✅ Exists at `/api/portal/branding` — looks up `client_instances.invited_by` → fetches agency `profiles` |
+| `usePortalRole` full vs simplified detection | ✅ Returns `allowFullAccess` boolean; checks `client_instances.allow_full_access` |
+| Sidebar for full access clients | ✅ Shows Hosting + Services when `allowFullAccess = true` |
+| Services layout client guard | ✅ Redirects simplified clients to `/portal`; full access clients pass through |
+| Hosting layout client guard | ✅ Redirects simplified clients to `/portal`; full access clients pass through |
+| Clients hidden from Settings | ✅ Clients now see Settings (Account tab only); tabs restricted in layout |

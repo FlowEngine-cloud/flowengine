@@ -130,7 +130,7 @@ export default function PortalSidebar() {
 
       {/* Bottom actions */}
       <div className="flex flex-col items-center gap-1 pt-3 border-t border-gray-800">
-        {role !== 'client' && BOTTOM_ITEMS.map(renderNavItem)}
+        {BOTTOM_ITEMS.map(renderNavItem)}
         <button
           onClick={async () => {
             await supabase.auth.signOut();

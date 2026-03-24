@@ -5,16 +5,20 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import SecondaryPanel, { SecondaryPanelSection } from '@/components/portal/SecondaryPanel';
 import { User, Building2, Search, Link2, KeyRound, Plug } from 'lucide-react';
 import { SettingsContext, type SettingsTab } from './context';
+import { usePortalRole } from '@/components/portal/usePortalRole';
 
 function SettingsLayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { role } = usePortalRole();
   const loading = false;
   // Self-hosted: all features unlocked, everyone has Teams-level access
   const isTeams = true;
   const [search, setSearch] = useState('');
 
-  const activeTab = (searchParams?.get('tab') as SettingsTab) || 'account';
+  const rawTab = (searchParams?.get('tab') as SettingsTab) || 'account';
+  // Clients can only access account tab — redirect if they somehow land elsewhere
+  const activeTab: SettingsTab = (role === 'client' && rawTab !== 'account') ? 'account' : rawTab;
 
   // Handle URL hash for deep linking
   useEffect(() => {
@@ -95,14 +99,17 @@ function SettingsLayoutInner({ children }: { children: React.ReactNode }) {
     { id: 'api' as const, label: 'API & MCP', icon: <Plug className="w-4 h-4" />, subItems: apiSubItems },
   ];
 
+  // Clients only see Account (their own profile)
+  const visibleTabs = role === 'client' ? tabs.filter(t => t.id === 'account') : tabs;
+
   // Filter tabs by search
   const q = search.toLowerCase();
   const filteredTabs = q
-    ? tabs.filter(t =>
+    ? visibleTabs.filter(t =>
         t.label.toLowerCase().includes(q) ||
         t.subItems.some(s => s.label.toLowerCase().includes(q))
       )
-    : tabs;
+    : visibleTabs;
 
   // Build SecondaryPanel sections - each tab is a main item, sub-items are nested
   const sections: SecondaryPanelSection[] = [];
