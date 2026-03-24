@@ -13,6 +13,8 @@ const DEMO_ALLOWLIST = [
   '/api/openclaw',
   '/api/settings/portal',       // GET portal settings (needed for branding)
   '/api/user-settings',
+  '/api/widget-studio',         // Allow saving UI components in demo mode
+  '/api/public',                // Allow public widget fetch/submit
 ];
 
 export function middleware(req: NextRequest) {
