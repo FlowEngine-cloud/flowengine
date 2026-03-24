@@ -153,6 +153,7 @@ function LogsSection({ instanceId, logsUrl, token }: { instanceId: string; logsU
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string; spin?: boolean; pulse?: boolean }> = {
   running:      { label: 'Running',      cls: 'text-green-400 bg-green-900/20 border-green-800', pulse: true },
+  active:       { label: 'Running',      cls: 'text-green-400 bg-green-900/20 border-green-800', pulse: true },
   stopped:      { label: 'Stopped',      cls: 'text-red-400 bg-red-900/20 border-red-800' },
   error:        { label: 'Error',        cls: 'text-red-400 bg-red-900/20 border-red-800' },
   provisioning: { label: 'Provisioning', cls: 'text-yellow-400 bg-yellow-900/20 border-yellow-800', spin: true },
