@@ -111,7 +111,11 @@ export default function N8nAccountPage({ focusInstanceId }: N8nAccountPageProps)
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-white font-semibold truncate">{instance.instance_name}</p>
-            <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full border mt-1 ${s.cls}`}>{s.label}</span>
+            {instance.is_external ? (
+              <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full border mt-1 text-gray-400 bg-gray-800/30 border-gray-700">External</span>
+            ) : (
+              <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full border mt-1 ${s.cls}`}>{s.label}</span>
+            )}
           </div>
           {instance.instance_url && (
             <a
