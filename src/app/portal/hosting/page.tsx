@@ -139,7 +139,7 @@ export default function HostingPage() {
             </p>
           ) : (
             <p className="text-xs text-white/30 mt-0.5">
-              {inst.status === 'pending_deploy' ? 'Choose service to deploy' : 'Ready to redeploy'}
+              {inst.deleted_at ? 'Deleted — click to redeploy' : inst.status === 'pending_deploy' ? 'Choose service to deploy' : 'Not configured'}
             </p>
           )}
         </div>
@@ -165,11 +165,13 @@ export default function HostingPage() {
     </button>
   );
 
-  const notDeployed = instances.filter(i => !i.service_type || i.deleted_at || i.status === 'pending_deploy');
-  const n8nInstances = instances.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy');
-  const openclawInstances = instances.filter(i => i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy');
-  const websiteInstances = instances.filter(i => (i.service_type === 'docker' || i.service_type === 'website') && !i.deleted_at && i.status !== 'pending_deploy');
-  const otherInstances = instances.filter(i => i.service_type === 'other' && !i.deleted_at && i.status !== 'pending_deploy');
+  // External instances (is_external=true) are managed from Client Properties, not shown here
+  const managed = instances.filter(i => !i.is_external);
+  const notDeployed = managed.filter(i => !i.service_type || i.deleted_at || i.status === 'pending_deploy');
+  const n8nInstances = managed.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy');
+  const openclawInstances = managed.filter(i => i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy');
+  const websiteInstances = managed.filter(i => (i.service_type === 'docker' || i.service_type === 'website') && !i.deleted_at && i.status !== 'pending_deploy');
+  const otherInstances = managed.filter(i => i.service_type === 'other' && !i.deleted_at && i.status !== 'pending_deploy');
 
   const sections = [
     { key: 'n8n',          title: 'n8n',          items: n8nInstances },

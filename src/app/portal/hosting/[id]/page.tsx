@@ -11,7 +11,8 @@ import { useAuth } from '@/components/AuthContext';
 import { usePortalInstances, PortalInstance } from '@/components/portal/usePortalInstances';
 import N8nAccountPage from '@/app/n8n-account/page';
 import { useHostingContext } from '../context';
-import { Server, Loader2, ChevronRight, ExternalLink, Play, Square, RotateCcw, Trash2, Globe, RefreshCw, Terminal, History, Pencil, Check, X, Link2 } from 'lucide-react';
+import { Server, Loader2, ChevronRight, ExternalLink, Play, Square, RotateCcw, Trash2, Globe, RefreshCw, Terminal, History, Pencil, Check, X, Link2, Users, Plus } from 'lucide-react';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { cn } from '@/lib/utils';
 
 function ServiceIcon({ serviceType, className = 'w-5 h-5' }: { serviceType?: string | null; className?: string }) {
@@ -478,6 +479,85 @@ function WebsiteInstanceDetail({ instance, onDeleted }: { instance: PortalInstan
   const [nameSaving, setNameSaving] = useState(false);
   const [currentName, setCurrentName] = useState(instance.instance_name);
 
+  // Client assignment (owner only)
+  type ClientAssignment = { user_id: string; client_email: string; client_name?: string };
+  const [clientAssignments, setClientAssignments] = useState<ClientAssignment[]>([]);
+  const [allAgencyClients, setAllAgencyClients] = useState<ClientAssignment[]>([]);
+  const [clientsLoaded, setClientsLoaded] = useState(false);
+  const [showAssignClientForm, setShowAssignClientForm] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [assigningClient, setAssigningClient] = useState(false);
+  const [assignClientError, setAssignClientError] = useState<string | null>(null);
+  const [revokingClientId, setRevokingClientId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!session?.access_token || clientsLoaded || instance.access !== 'owner') return;
+    const load = async () => {
+      try {
+        const res = await fetch('/api/client/instances', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const instances: any[] = data.instances || [];
+        const seenIds = new Set<string>();
+        const all: ClientAssignment[] = [];
+        for (const ci of instances) {
+          if (!ci.user_id || ci.user_id.startsWith('pending:')) continue;
+          if (seenIds.has(ci.user_id)) continue;
+          seenIds.add(ci.user_id);
+          all.push({ user_id: ci.user_id, client_email: ci.client_email || ci.user_id, client_name: ci.client_name });
+        }
+        setAllAgencyClients(all);
+        const assigned = instances
+          .filter(ci => ci.instance_id === instance.id && !ci.user_id?.startsWith('pending:') && !ci.client_paid)
+          .map(ci => ({ user_id: ci.user_id, client_email: ci.client_email || ci.user_id, client_name: ci.client_name }));
+        setClientAssignments(assigned);
+      } catch { /* silent */ } finally {
+        setClientsLoaded(true);
+      }
+    };
+    load();
+  }, [session?.access_token, clientsLoaded, instance.id, instance.access]);
+
+  const handleAssignClient = async () => {
+    if (!session?.access_token || !selectedClientId) return;
+    setAssigningClient(true);
+    setAssignClientError(null);
+    try {
+      const res = await fetch('/api/client/instances', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ instance_id: instance.id, client_user_id: selectedClientId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setAssignClientError(data.error || 'Failed to assign client'); return; }
+      const client = allAgencyClients.find(c => c.user_id === selectedClientId);
+      if (client) setClientAssignments(prev => [...prev, client]);
+      setShowAssignClientForm(false);
+      setSelectedClientId('');
+    } catch {
+      setAssignClientError('Failed to assign client');
+    } finally {
+      setAssigningClient(false);
+    }
+  };
+
+  const handleRevokeClient = async (clientUserId: string) => {
+    if (!session?.access_token) return;
+    setRevokingClientId(clientUserId);
+    try {
+      const res = await fetch('/api/client/instances', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ instance_id: instance.id, user_id: clientUserId }),
+      });
+      if (res.ok) setClientAssignments(prev => prev.filter(c => c.user_id !== clientUserId));
+    } catch { /* silent */ } finally {
+      setRevokingClientId(null);
+    }
+  };
+
   // Live status
   const [liveStatus, setLiveStatus] = useState(instance.status);
   const [actionLoading, setActionLoading] = useState<'start' | 'stop' | 'restart' | 'redeploy' | null>(null);
@@ -822,6 +902,81 @@ function WebsiteInstanceDetail({ instance, onDeleted }: { instance: PortalInstan
               {openingBilling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
               Manage Billing
             </button>
+          </div>
+        )}
+
+        {/* Assign to Client — owner only */}
+        {instance.access === 'owner' && (
+          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-white">Assigned Clients</p>
+              {clientsLoaded && !showAssignClientForm && allAgencyClients.filter(c => !clientAssignments.some(a => a.user_id === c.user_id)).length > 0 && (
+                <button
+                  onClick={() => setShowAssignClientForm(true)}
+                  className="flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors"
+                >
+                  <Plus className="w-3 h-3" /> Assign
+                </button>
+              )}
+            </div>
+
+            {showAssignClientForm && (
+              <div className="space-y-3">
+                <SearchableSelect
+                  value={selectedClientId}
+                  onChange={setSelectedClientId}
+                  placeholder="Select a client..."
+                  options={[
+                    { value: '', label: 'Select a client...' },
+                    ...allAgencyClients
+                      .filter(c => !clientAssignments.some(a => a.user_id === c.user_id))
+                      .map(c => ({ value: c.user_id, label: c.client_name ? `${c.client_name} (${c.client_email})` : c.client_email }))
+                  ]}
+                />
+                {assignClientError && <p className="text-xs text-red-400">{assignClientError}</p>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAssignClient}
+                    disabled={!selectedClientId || assigningClient}
+                    className="px-3 py-2 bg-white text-black hover:bg-gray-100 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    {assigningClient ? 'Assigning...' : 'Assign'}
+                  </button>
+                  <button
+                    onClick={() => { setShowAssignClientForm(false); setSelectedClientId(''); setAssignClientError(null); }}
+                    className="px-3 py-2 border border-gray-700 hover:bg-gray-700 text-white/60 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!clientsLoaded ? (
+              <Loader2 className="w-4 h-4 animate-spin text-white/30" />
+            ) : clientAssignments.length === 0 ? (
+              <p className="text-sm text-white/40">No clients assigned</p>
+            ) : (
+              <div className="space-y-2">
+                {clientAssignments.map(c => (
+                  <div key={c.user_id} className="flex items-center gap-3 p-3 bg-gray-900/50 border border-gray-800 rounded-lg">
+                    <Users className="w-4 h-4 text-white/30 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      {c.client_name && <p className="text-sm font-medium text-white truncate">{c.client_name}</p>}
+                      <p className="text-sm text-white/60 truncate">{c.client_email}</p>
+                    </div>
+                    <button
+                      onClick={() => handleRevokeClient(c.user_id)}
+                      disabled={revokingClientId === c.user_id}
+                      className="p-1.5 rounded-lg hover:bg-red-900/30 text-white/20 hover:text-red-400 transition-colors disabled:opacity-50"
+                      title="Revoke access"
+                    >
+                      {revokingClientId === c.user_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

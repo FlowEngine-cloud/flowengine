@@ -18,10 +18,11 @@ export async function GET(req: NextRequest) {
     // Fetch pay-per-instance deployments (owned or agency-managed)
     const { data: payPerInstances, error: payPerError } = await supabaseAdmin
       .from('pay_per_instance_deployments')
-      .select('id, instance_name, instance_url, status, n8n_api_key, storage_limit_gb')
+      .select('id, instance_name, instance_url, status, n8n_api_key, storage_limit_gb, is_external')
       .or(`user_id.eq.${user.id},invited_by_user_id.eq.${user.id}`)
       .neq('subscription_status', 'canceled')
       .is('deleted_at', null)
+      .or('is_external.eq.false,is_external.is.null') // exclude self-hosted external instances; not manageable via API
       .order('created_at', { ascending: false });
 
     if (payPerError) {

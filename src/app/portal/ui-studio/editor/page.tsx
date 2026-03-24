@@ -1783,6 +1783,7 @@ function WidgetStudioContent({ embedded = false }: { embedded?: boolean } = {}) 
     // Validate button text (only for form/button components, not chatbots)
     if (widgetType !== 'chatbot' && (!styles.buttonText || !styles.buttonText.trim())) {
       setSaveError('Button text cannot be empty');
+      skipAutoSaveRef.current = false; // Resume auto-save on validation error
       return;
     }
 

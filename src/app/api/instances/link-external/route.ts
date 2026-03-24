@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
         instance_name: name.trim().substring(0, 50),
         instance_url: normalizedUrl,
         n8n_api_key: serviceType === 'n8n' ? (apiKey?.trim() || null) : null,
-        status: 'active',
+        status: 'external', // neutral status — external instances are not managed by us
         is_external: true,
         storage_limit_gb: 0,
         service_type: serviceType,
@@ -94,7 +94,12 @@ export async function POST(req: NextRequest) {
 
     if (assignError) {
       console.error('[link-external] Assign error:', assignError);
-      // Still return success — the instance was created
+      // Instance was created — return partial success with a warning
+      return NextResponse.json({
+        success: true,
+        warning: 'Instance linked but could not be assigned to client.',
+        instance: { id: instance.id, name: instance.instance_name, url: instance.instance_url },
+      });
     }
 
     return NextResponse.json({ success: true, instance });

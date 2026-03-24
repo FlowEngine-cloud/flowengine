@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Copy, Check, ExternalLink, Zap, MousePointer, FileText, MessageSquare, Code2, Braces, Globe, QrCode, Unlink, Power, ChevronDown, Link, Loader2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
+import { WidgetInlinePreview } from '@/components/widgets/WidgetInlinePreview';
 
 // =============================================================================
 // Types
@@ -182,17 +183,11 @@ export default function WidgetPreviewModal({
                 </button>
               </div>
 
-              {/* Body: iframe + sidebar */}
+              {/* Body: preview + sidebar */}
               <div className="flex-1 overflow-hidden flex">
-                {/* Preview iframe */}
-                <div className="flex-1 bg-white overflow-hidden">
-                  <iframe
-                    key={widget.id}
-                    src={`/w/${widget.id}`}
-                    className="w-full h-full border-0"
-                    title={`Preview: ${widget.name}`}
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                  />
+                {/* Inline preview — renders widget components directly (no iframe) */}
+                <div className="flex-1 overflow-hidden">
+                  <WidgetInlinePreview widget={widget} />
                 </div>
 
                 {/* Right sidebar */}
