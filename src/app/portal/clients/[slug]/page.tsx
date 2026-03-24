@@ -1299,10 +1299,16 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
                         <p className="text-sm font-medium text-white truncate">{inst.instance_name}</p>
                         {inst.is_external && <span className="text-sm text-white/30">External</span>}
                       </div>
-                      <span className={cn('px-2 py-0.5 text-xs rounded-full inline-flex items-center gap-1.5', tag.badgeClass)}>
-                        <span className={cn('w-1.5 h-1.5 rounded-full', tag.dotColor)} />
-                        {tag.label}
-                      </span>
+                      {inst.is_external ? (
+                        <span className="px-2 py-0.5 text-xs rounded-full inline-flex items-center gap-1.5 bg-gray-800/30 text-white/40 border border-gray-700">
+                          External
+                        </span>
+                      ) : (
+                        <span className={cn('px-2 py-0.5 text-xs rounded-full inline-flex items-center gap-1.5', tag.badgeClass)}>
+                          <span className={cn('w-1.5 h-1.5 rounded-full', tag.dotColor)} />
+                          {tag.label}
+                        </span>
+                      )}
                     </div>
                   );
                 })}
