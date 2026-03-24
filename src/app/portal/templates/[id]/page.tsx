@@ -441,7 +441,7 @@ export default function TemplateDetailPage({ params }: { params: Promise<{ id: s
               <div className="flex flex-wrap gap-2">
                 {template.required_credentials.map((cred) => (
                   <div key={cred.type} className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/30 border border-gray-700 rounded-lg">
-                    <CredentialIcon type={cred.icon} fallback="none" className="h-4 w-4" />
+                    <CredentialIcon type={cred.icon} className="h-4 w-4" />
                     <span className="text-sm text-white/80">{cred.name}</span>
                   </div>
                 ))}

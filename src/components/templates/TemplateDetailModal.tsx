@@ -199,7 +199,7 @@ export default function TemplateDetailModal({
                         className="flex items-center justify-between p-3 rounded-lg bg-green-900/20 border border-green-800/50"
                       >
                         <div className="flex items-center gap-3">
-                          <CredentialIcon type={cred.icon} fallback="none" className="w-5 h-5 text-green-400" />
+                          <CredentialIcon type={cred.icon} fallback="key" className="w-5 h-5 text-green-400" />
                           <span className="text-white">{cred.name}</span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -234,7 +234,7 @@ export default function TemplateDetailModal({
                         className="flex items-center justify-between p-3 rounded-lg bg-red-900/20 border border-red-800/50"
                       >
                         <div className="flex items-center gap-3">
-                          <CredentialIcon type={cred.icon} fallback="none" className="w-5 h-5 text-red-400" />
+                          <CredentialIcon type={cred.icon} fallback="key" className="w-5 h-5 text-red-400" />
                           <span className="text-white">{cred.name}</span>
                         </div>
                         <div className="flex items-center gap-2">

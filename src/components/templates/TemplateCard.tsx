@@ -79,7 +79,10 @@ export default function TemplateCard({ template, onClick, index = 0, disabled = 
         <div className="w-10 h-10 rounded-xl bg-gray-800/30 flex items-center justify-center shrink-0">
           {(() => {
             const IconComponent = template.icon ? iconMap[template.icon] : null;
-            return IconComponent ? <IconComponent className="h-5 w-5 text-gray-400" /> : <Zap className="h-5 w-5 text-gray-400" />;
+            if (IconComponent) return <IconComponent className="h-5 w-5 text-gray-400" />;
+            // Render emoji/unicode icons directly as text
+            if (template.icon) return <span className="text-lg leading-none">{template.icon}</span>;
+            return <Zap className="h-5 w-5 text-gray-400" />;
           })()}
         </div>
         <div className="flex-1 min-w-0">
