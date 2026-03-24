@@ -11,14 +11,76 @@ import { useAuth } from '@/components/AuthContext';
 import { usePortalInstances, PortalInstance } from '@/components/portal/usePortalInstances';
 import N8nAccountPage from '@/app/n8n-account/page';
 import { useHostingContext } from '../context';
-import { Server, Loader2, ChevronRight, ExternalLink, Play, Square, RotateCcw, Trash2, Globe, RefreshCw, Terminal, History } from 'lucide-react';
+import { Server, Loader2, ChevronRight, ExternalLink, Play, Square, RotateCcw, Trash2, Globe, RefreshCw, Terminal, History, Pencil, Check, X, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function ServiceIcon({ serviceType, className = 'w-5 h-5' }: { serviceType?: string | null; className?: string }) {
   if (serviceType === 'openclaw') return <img src="/logos/openclaw.png" className={`${className} object-contain rounded`} alt="OpenClaw" />;
   if (serviceType === 'docker' || serviceType === 'website') return <Globe className={className + ' text-white/60'} />;
   if (serviceType === 'n8n') return <img src="/logos/n8n.svg" className={className + ' object-contain'} alt="n8n" style={{ filter: 'brightness(0) invert(1) opacity(0.7)' }} />;
+  if (serviceType === 'other') return <Link2 className={className + ' text-white/60'} />;
   return <Server className={className + ' text-white/30'} />;
+}
+
+// Shared inline name editor used by multiple detail components
+function InlineNameEditor({
+  name,
+  onSave,
+  saving,
+}: {
+  name: string;
+  onSave: (newName: string) => Promise<void>;
+  saving: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+
+  const handleSave = async () => {
+    if (!draft.trim() || draft.trim() === name) { setEditing(false); return; }
+    await onSave(draft.trim());
+    setEditing(false);
+  };
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2 min-w-0">
+        <p className="text-white font-semibold truncate">{name}</p>
+        <button
+          onClick={() => { setDraft(name); setEditing(true); }}
+          className="p-1 rounded hover:bg-gray-700 text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 min-w-0 flex-1">
+      <input
+        autoFocus
+        type="text"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
+        maxLength={50}
+        className="flex-1 min-w-0 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-white"
+      />
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="p-1 rounded hover:bg-gray-700 text-green-400 hover:text-green-300 transition-colors flex-shrink-0 disabled:opacity-50"
+      >
+        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+      </button>
+      <button
+        onClick={() => setEditing(false)}
+        className="p-1 rounded hover:bg-gray-700 text-white/40 hover:text-white/60 transition-colors flex-shrink-0"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
 }
 
 // ─── Shared Logs Section ─────────────────────────────────────────────────────
@@ -98,13 +160,15 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string; spin?: boolean
   restarting:   { label: 'Restarting',   cls: 'text-yellow-400 bg-yellow-900/20 border-yellow-800', spin: true },
 };
 
-function FlowEngineInstanceDetail({ instance, onDeleted }: { instance: PortalInstance; onDeleted: () => void }) {
+function FlowEngineInstanceDetail({ instance, onDeleted, onRenamed }: { instance: PortalInstance; onDeleted: () => void; onRenamed?: (newName: string) => void }) {
   const { session } = useAuth();
 
   const [detail, setDetail] = useState<{ status: string; billing_cycle?: string } | null>(null);
   const [actionLoading, setActionLoading] = useState<'start' | 'stop' | 'restart' | 'delete' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [nameSaving, setNameSaving] = useState(false);
+  const [currentName, setCurrentName] = useState(instance.instance_name);
 
   const [fakeStatus, setFakeStatus] = useState<string | null>(null);
 
@@ -228,11 +292,30 @@ function FlowEngineInstanceDetail({ instance, onDeleted }: { instance: PortalIns
         setActionLoading(null);
         return;
       }
-      try { sessionStorage.removeItem('portal-hosting-instances'); } catch {}
+      try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
       onDeleted();
     } catch {
       setActionError('Delete failed. Please try again.');
       setActionLoading(null);
+    }
+  };
+
+  const handleRename = async (newName: string) => {
+    if (!session?.access_token) return;
+    setNameSaving(true);
+    try {
+      const res = await fetch(`/api/flowengine/instances/${instance.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ instance_name: newName }),
+      });
+      if (res.ok) {
+        setCurrentName(newName);
+        try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
+        if (onRenamed) onRenamed(newName);
+      }
+    } catch {} finally {
+      setNameSaving(false);
     }
   };
 
@@ -250,7 +333,7 @@ function FlowEngineInstanceDetail({ instance, onDeleted }: { instance: PortalIns
               <ServiceIcon serviceType={instance.service_type} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white font-semibold truncate">{instance.instance_name}</p>
+              <InlineNameEditor name={currentName} onSave={handleRename} saving={nameSaving} />
               <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border mt-1 ${sc.cls}`}>
                 {sc.spin && <Loader2 className="w-3 h-3 animate-spin" />}
                 {!sc.spin && sc.pulse && <span className="w-1.5 h-1.5 bg-current rounded-full animate-pulse" />}
@@ -392,6 +475,8 @@ function WebsiteInstanceDetail({ instance, onDeleted }: { instance: PortalInstan
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [nameSaving, setNameSaving] = useState(false);
+  const [currentName, setCurrentName] = useState(instance.instance_name);
 
   // Live status
   const [liveStatus, setLiveStatus] = useState(instance.status);
@@ -519,11 +604,29 @@ function WebsiteInstanceDetail({ instance, onDeleted }: { instance: PortalInstan
         setDeleting(false);
         return;
       }
-      try { sessionStorage.removeItem('portal-hosting-instances'); } catch {}
+      try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
       onDeleted();
     } catch {
       setDeleteError('Delete failed. Please try again.');
       setDeleting(false);
+    }
+  };
+
+  const handleRename = async (newName: string) => {
+    if (!session?.access_token) return;
+    setNameSaving(true);
+    try {
+      const res = await fetch('/api/hosting/rename', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ instanceId: instance.id, newName }),
+      });
+      if (res.ok) {
+        setCurrentName(newName);
+        try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
+      }
+    } catch {} finally {
+      setNameSaving(false);
     }
   };
 
@@ -538,7 +641,7 @@ function WebsiteInstanceDetail({ instance, onDeleted }: { instance: PortalInstan
               <Globe className="w-5 h-5 text-white/60" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white font-semibold truncate">{instance.instance_name}</p>
+              <InlineNameEditor name={currentName} onSave={handleRename} saving={nameSaving} />
               <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border mt-1 ${sc.cls}`}>
                 {sc.spin && <Loader2 className="w-3 h-3 animate-spin" />}
                 {!sc.spin && sc.pulse && <span className="w-1.5 h-1.5 bg-current rounded-full animate-pulse" />}
@@ -768,6 +871,148 @@ function WebsiteInstanceDetail({ instance, onDeleted }: { instance: PortalInstan
   );
 }
 
+function ExternalInstanceDetail({ instance, onDeleted }: { instance: PortalInstance; onDeleted: () => void }) {
+  const { session } = useAuth();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [nameSaving, setNameSaving] = useState(false);
+  const [currentName, setCurrentName] = useState(instance.instance_name);
+
+  const created = instance.created_at ? new Date(instance.created_at).toLocaleDateString() : null;
+
+  const handleRename = async (newName: string) => {
+    if (!session?.access_token) return;
+    setNameSaving(true);
+    try {
+      const res = await fetch('/api/hosting/rename', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ instanceId: instance.id, newName }),
+      });
+      if (res.ok) {
+        setCurrentName(newName);
+        try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
+      }
+    } catch {} finally {
+      setNameSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!session?.access_token) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch('/api/hosting/connect', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ instanceId: instance.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setDeleteError(data.error || 'Failed to remove instance');
+        setDeleting(false);
+        return;
+      }
+      try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
+      onDeleted();
+    } catch {
+      setDeleteError('Delete failed. Please try again.');
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="max-w-2xl mx-auto px-4 py-8 space-y-4">
+
+        {/* Header card */}
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-5">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-10 h-10 bg-gray-800/30 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Link2 className="w-5 h-5 text-white/60" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <InlineNameEditor name={currentName} onSave={handleRename} saving={nameSaving} />
+              <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border mt-1 text-gray-400 bg-gray-800/30 border-gray-700">
+                External
+              </span>
+            </div>
+            {instance.instance_url && (
+              <a
+                href={instance.instance_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-4 py-2 bg-white text-black hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
+              >
+                Open <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {instance.instance_url && (
+              <div className="bg-gray-800/30 rounded-lg p-3 col-span-2 sm:col-span-2">
+                <p className="text-sm text-white/60 mb-1">URL</p>
+                <p className="text-white font-medium text-sm truncate">{instance.instance_url}</p>
+              </div>
+            )}
+            {created && (
+              <div className="bg-gray-800/30 rounded-lg p-3">
+                <p className="text-sm text-white/60 mb-1">Added</p>
+                <p className="text-white font-medium">{created}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Danger zone */}
+        {instance.access === 'owner' && (
+          <div className="bg-gray-900/50 border border-red-800 rounded-lg p-5">
+            <p className="text-sm font-medium text-white mb-1">Danger Zone</p>
+            <p className="text-sm text-white/60 mb-4">Remove this external service from your portal.</p>
+            {!showDeleteConfirm ? (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-red-900/20 text-red-400 border border-red-800 hover:bg-red-900/30 rounded-lg text-sm font-medium transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Remove
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-red-400">
+                  Remove <span className="font-semibold">{currentName}</span> from your portal? This does not affect the actual service.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    Yes, Remove
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={deleting}
+                    className="px-3 py-2 bg-gray-800 text-white/60 hover:text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {deleteError && <p className="text-sm text-red-400">{deleteError}</p>}
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
 type ServiceType = 'n8n' | 'openclaw' | 'docker';
 
 const AI_PROVIDER_URL = process.env.NEXT_PUBLIC_AI_PROVIDER_URL || process.env.NEXT_PUBLIC_AI_BASE_URL || 'https://openrouter.ai/api';
@@ -846,7 +1091,7 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
             else localStorage.removeItem('n8n_action_blocks');
           }
         } catch {}
-        try { sessionStorage.removeItem('portal-hosting-instances'); } catch {}
+        try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
         window.location.reload();
       }, remaining);
       return () => clearTimeout(timer);
@@ -881,7 +1126,7 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
               else localStorage.removeItem('n8n_action_blocks');
             }
           } catch {}
-          try { sessionStorage.removeItem('portal-hosting-instances'); } catch {}
+          try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
           window.location.reload();
         }, remaining);
       } catch {}
@@ -914,7 +1159,7 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
 
   const handleInstanceDeleted = useCallback(async () => {
     setLocallyDeleted(true);
-    try { sessionStorage.removeItem('portal-hosting-instances'); } catch {}
+    try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
     await Promise.all([refetchInstances(), refetchLocal()]);
   }, [refetchInstances, refetchLocal]);
 
@@ -994,7 +1239,7 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
       } catch {}
 
       // Clear cache and reload — N8nAccountPage will pick up fake status
-      try { sessionStorage.removeItem('portal-hosting-instances'); } catch {}
+      try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
       setTimeout(() => { window.location.reload(); }, 1500);
     } catch {
       setDeployError('Something went wrong. Please try again.');
@@ -1019,6 +1264,11 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
   // Website / Docker instances get their own detail component
   if (!isPending && (instance?.service_type === 'docker' || instance?.service_type === 'website')) {
     return <WebsiteInstanceDetail instance={instance} onDeleted={handleInstanceDeleted} />;
+  }
+
+  // External "other" instances — simple name editor + optional URL + remove
+  if (!isPending && instance?.service_type === 'other') {
+    return <ExternalInstanceDetail instance={instance} onDeleted={handleInstanceDeleted} />;
   }
 
   // Not pending = show N8nAccountPage which handles everything (loading, status, actions) for n8n + openclaw

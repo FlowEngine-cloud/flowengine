@@ -179,9 +179,9 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
   const [teamSuccess, setTeamSuccess] = useState<string | null>(null);
   const [teamConfirmRemove, setTeamConfirmRemove] = useState<string | null>(null);
 
-  // External N8N linking
+  // External instance linking
   const [showExternalForm, setShowExternalForm] = useState(false);
-  const [externalForm, setExternalForm] = useState({ name: '', instanceUrl: '', apiKey: '', clientAccess: false });
+  const [externalForm, setExternalForm] = useState({ serviceType: 'n8n' as 'n8n' | 'openclaw' | 'other', name: '', instanceUrl: '', apiKey: '', clientAccess: false });
   const [linkingExternal, setLinkingExternal] = useState(false);
   const [externalError, setExternalError] = useState<string | null>(null);
 
@@ -739,18 +739,24 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
 
   const handleLinkExternal = async () => {
     if (!session?.access_token) return;
-    const { name, instanceUrl, apiKey } = externalForm;
-    if (!name.trim() || !instanceUrl.trim() || !apiKey.trim()) {
-      setExternalError('All fields are required.');
-      return;
-    }
+    const { serviceType, name, instanceUrl, apiKey } = externalForm;
+    if (!name.trim()) { setExternalError('Name is required.'); return; }
+    if (serviceType !== 'other' && !instanceUrl.trim()) { setExternalError('URL is required.'); return; }
+    if (serviceType === 'n8n' && !apiKey.trim()) { setExternalError('API key is required for n8n.'); return; }
     setLinkingExternal(true);
     setExternalError(null);
     try {
       const res = await fetch('/api/instances/link-external', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ name: name.trim(), instanceUrl: instanceUrl.trim(), apiKey: apiKey.trim(), clientUserId, clientAccess: externalForm.clientAccess }),
+        body: JSON.stringify({
+          name: name.trim(),
+          serviceType,
+          instanceUrl: instanceUrl.trim() || undefined,
+          apiKey: apiKey.trim() || undefined,
+          clientUserId,
+          clientAccess: externalForm.clientAccess,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -758,7 +764,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
         return;
       }
       setShowExternalForm(false);
-      setExternalForm({ name: '', instanceUrl: '', apiKey: '', clientAccess: false });
+      setExternalForm({ serviceType: 'n8n', name: '', instanceUrl: '', apiKey: '', clientAccess: false });
       refetch();
     } catch {
       setExternalError('Something went wrong. Please try again.');
@@ -1732,10 +1738,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
             )}
           </div>
 
-          {/* External N8N Section */}
+          {/* External Instances Section */}
           <div id="external">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wide">External N8N</h3>
+              <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wide">External Instances</h3>
               {!showExternalForm && (
                 <button
                   onClick={() => setShowExternalForm(true)}
@@ -1749,7 +1755,23 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
 
             {showExternalForm && (
               <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-3 mb-3">
-                <p className="text-sm text-white/60">Link a self-hosted N8N instance for this client.</p>
+                {/* Service type selector */}
+                <div className="flex gap-2">
+                  {(['n8n', 'openclaw', 'other'] as const).map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setExternalForm(f => ({ ...f, serviceType: type }))}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors cursor-pointer capitalize ${
+                        externalForm.serviceType === type
+                          ? 'bg-white text-black border-white'
+                          : 'border-gray-700 text-white/60 hover:bg-gray-800'
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
                 <input
                   type="text"
                   placeholder="Instance name"
@@ -1757,20 +1779,33 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
                   onChange={e => setExternalForm(f => ({ ...f, name: e.target.value }))}
                   className="w-full px-4 py-3 bg-gray-900/50 border border-gray-800 rounded-lg text-white placeholder:text-gray-500 focus:ring-2 focus:ring-white focus:border-white outline-none text-sm"
                 />
-                <input
-                  type="url"
-                  placeholder="N8N URL (e.g. https://n8n.yourdomain.com)"
-                  value={externalForm.instanceUrl}
-                  onChange={e => setExternalForm(f => ({ ...f, instanceUrl: e.target.value }))}
-                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-800 rounded-lg text-white placeholder:text-gray-500 focus:ring-2 focus:ring-white focus:border-white outline-none text-sm"
-                />
-                <input
-                  type="password"
-                  placeholder="N8N API Key"
-                  value={externalForm.apiKey}
-                  onChange={e => setExternalForm(f => ({ ...f, apiKey: e.target.value }))}
-                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-800 rounded-lg text-white placeholder:text-gray-500 focus:ring-2 focus:ring-white focus:border-white outline-none text-sm"
-                />
+                {externalForm.serviceType !== 'other' && (
+                  <input
+                    type="url"
+                    placeholder={externalForm.serviceType === 'n8n' ? 'N8N URL (e.g. https://n8n.yourdomain.com)' : 'OpenClaw URL'}
+                    value={externalForm.instanceUrl}
+                    onChange={e => setExternalForm(f => ({ ...f, instanceUrl: e.target.value }))}
+                    className="w-full px-4 py-3 bg-gray-900/50 border border-gray-800 rounded-lg text-white placeholder:text-gray-500 focus:ring-2 focus:ring-white focus:border-white outline-none text-sm"
+                  />
+                )}
+                {externalForm.serviceType === 'other' && (
+                  <input
+                    type="url"
+                    placeholder="URL (optional)"
+                    value={externalForm.instanceUrl}
+                    onChange={e => setExternalForm(f => ({ ...f, instanceUrl: e.target.value }))}
+                    className="w-full px-4 py-3 bg-gray-900/50 border border-gray-800 rounded-lg text-white placeholder:text-gray-500 focus:ring-2 focus:ring-white focus:border-white outline-none text-sm"
+                  />
+                )}
+                {externalForm.serviceType === 'n8n' && (
+                  <input
+                    type="password"
+                    placeholder="N8N API Key"
+                    value={externalForm.apiKey}
+                    onChange={e => setExternalForm(f => ({ ...f, apiKey: e.target.value }))}
+                    className="w-full px-4 py-3 bg-gray-900/50 border border-gray-800 rounded-lg text-white placeholder:text-gray-500 focus:ring-2 focus:ring-white focus:border-white outline-none text-sm"
+                  />
+                )}
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
@@ -1790,9 +1825,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
                   <div>
                     <span className="text-sm text-white">Client access</span>
                     <p className="text-sm text-white/60">
-                      {externalForm.clientAccess
-                        ? 'Client can access the n8n instance'
-                        : 'Client sees only the portal and never sees n8n'}
+                      {externalForm.clientAccess ? 'Client can see this instance' : 'Only you (agency) can see this'}
                     </p>
                   </div>
                 </div>
@@ -1808,7 +1841,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
                     {linkingExternal ? 'Linking...' : 'Link Instance'}
                   </button>
                   <button
-                    onClick={() => { setShowExternalForm(false); setExternalError(null); setExternalForm({ name: '', instanceUrl: '', apiKey: '', clientAccess: false }); }}
+                    onClick={() => { setShowExternalForm(false); setExternalError(null); setExternalForm({ serviceType: 'n8n', name: '', instanceUrl: '', apiKey: '', clientAccess: false }); }}
                     className="px-4 py-2.5 border border-gray-700 hover:bg-gray-700 text-white/60 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                   >
                     Cancel
@@ -1820,8 +1853,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
             {!showExternalForm && realInstances.filter(i => i.is_external).length === 0 && (
               <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 flex flex-col items-center text-center">
                 <Server className="w-8 h-8 text-white/20 mb-2" />
-                <p className="text-sm text-white/40">No external N8N instances linked.</p>
-                <p className="text-sm text-white/25 mt-1">Link a self-hosted instance for free.</p>
+                <p className="text-sm text-white/40">No external instances linked.</p>
+                <p className="text-sm text-white/25 mt-1">Link any n8n, OpenClaw, or other external service.</p>
               </div>
             )}
 
@@ -1829,6 +1862,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
               <div className="space-y-2">
                 {realInstances.filter(i => i.is_external).map(inst => {
                   const isConfirmingExternal = revokeConfirm === `ext-${inst.instance_id}`;
+                  const typeLabel = inst.service_type === 'openclaw' ? 'OpenClaw' : inst.service_type === 'n8n' ? 'n8n' : inst.service_type === 'other' ? 'Other' : 'External';
                   return (
                     <div key={inst.instance_id} className="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden">
                       {isConfirmingExternal ? (
@@ -1859,7 +1893,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
                               <p className="text-sm text-white/40 truncate mt-0.5">{inst.instance_url.replace('https://', '')}</p>
                             )}
                           </div>
-                          <span className="px-2 py-0.5 rounded-full text-xs bg-gray-800/30 text-white/60 border border-gray-700 shrink-0">External</span>
+                          <span className="px-2 py-0.5 rounded-full text-xs bg-gray-800/30 text-white/60 border border-gray-700 shrink-0">{typeLabel}</span>
                           <button
                             onClick={() => setRevokeConfirm(`ext-${inst.instance_id}`)}
                             className="p-2 hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-colors cursor-pointer shrink-0 rounded-lg"
@@ -1927,8 +1961,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
             )}
           </div>
 
-          {/* Other Section */}
-          <div id="other">
+          {/* Other Section - HIDDEN: use External Instances for hosted services */}
+          {false && <div id="other">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wide">Other</h3>
               {!showOtherForm && (
@@ -2101,7 +2135,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
                 })}
               </div>
             )}
-          </div>
+          </div>}
 
           {error && (
             <div className="flex items-center gap-2 px-4 py-3 bg-red-900/20 border border-red-800 rounded-lg text-red-400 text-sm">

@@ -183,6 +183,11 @@ class FlowEngineClient {
     await this.request('DELETE', `/api/v1/n8n/instances/${id}`);
   }
 
+  /** Rename a managed instance */
+  async renameInstance(id: string, newName: string): Promise<{ success: boolean; instance_name: string }> {
+    return this.request('PATCH', `/api/v1/n8n/instances/${id}`, { instance_name: newName });
+  }
+
   /** Start, stop, or restart an n8n instance */
   async manageInstance(id: string, action: 'start' | 'stop' | 'restart'): Promise<{ success: boolean; message: string }> {
     return this.request('POST', `/api/v1/n8n/instances/${id}/manage`, { action });

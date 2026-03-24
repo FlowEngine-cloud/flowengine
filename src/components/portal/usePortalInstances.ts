@@ -16,7 +16,7 @@ export interface PortalInstance {
   is_external?: boolean;
   access: 'owner' | 'manager' | 'client';
   deleted_at?: string | null;
-  service_type?: 'n8n' | 'openclaw' | 'docker' | 'website' | 'mcp_bridge' | 'vps' | null;
+  service_type?: 'n8n' | 'openclaw' | 'docker' | 'website' | 'mcp_bridge' | 'vps' | 'other' | null;
   stripe_subscription_id?: string | null;
   platform?: 'flowengine';
 }

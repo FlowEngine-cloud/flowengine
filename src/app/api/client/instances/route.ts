@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
             created_at,
             user_id,
             is_external,
+            service_type,
             deleted_at
           )
         `)
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
       // Instances where client invited this agency
       supabaseAdmin
         .from('pay_per_instance_deployments')
-        .select('id, instance_name, instance_url, status, storage_limit_gb, created_at, user_id, is_external')
+        .select('id, instance_name, instance_url, status, storage_limit_gb, created_at, user_id, is_external, service_type')
         .eq('invited_by_user_id', effectiveUserId)
         .is('deleted_at', null)
     ]);
@@ -98,6 +99,7 @@ export async function GET(req: NextRequest) {
         storage_limit_gb: number;
         created_at: string;
         is_external?: boolean;
+        service_type?: string | null;
         deleted_at?: string | null;
       } | null;
     };
@@ -135,6 +137,7 @@ export async function GET(req: NextRequest) {
           client_name: invite?.id ? (inviteNameById.get(invite.id) || undefined) : undefined,
           client_paid: false,
           is_external: ci.instance?.is_external || false,
+          service_type: ci.instance?.service_type || null,
         };
       });
 
@@ -152,6 +155,7 @@ export async function GET(req: NextRequest) {
       client_name: undefined,
       client_paid: true,
       is_external: inst.is_external || false,
+      service_type: (inst as any).service_type || null,
     }));
 
     // Merge both sources

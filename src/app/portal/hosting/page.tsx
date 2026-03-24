@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePortalInstances, PortalInstance } from '@/components/portal/usePortalInstances';
 import { useAuth } from '@/components/AuthContext';
-import { Server, ExternalLink, Loader2, Plus, Globe, CreditCard } from 'lucide-react';
+import { Server, ExternalLink, Loader2, Plus, Globe, CreditCard, Link2 } from 'lucide-react';
 import { useHostingContext } from './context';
 
 // ─── Service icons (module-level, stable references) ─────────────────────────
@@ -26,6 +26,7 @@ function serviceCardIcon(serviceType: string | null | undefined) {
   if (!serviceType) return <Server className="w-4 h-4 text-white/30" />;
   if (serviceType === 'openclaw') return openclawImg('w-6 h-6');
   if (serviceType === 'docker' || serviceType === 'website') return <Globe className="w-5 h-5 text-white/60" />;
+  if (serviceType === 'other') return <Link2 className="w-5 h-5 text-white/60" />;
   return n8nSvg('w-5 h-5');
 }
 
@@ -33,6 +34,7 @@ function sectionIcon(key: string) {
   if (key === 'n8n') return n8nSvg('w-4 h-4');
   if (key === 'openclaw') return openclawImg('w-4 h-4');
   if (key === 'website') return <Globe className="w-4 h-4" />;
+  if (key === 'other') return <Link2 className="w-4 h-4" />;
   return <Server className="w-4 h-4" />;
 }
 
@@ -167,11 +169,13 @@ export default function HostingPage() {
   const n8nInstances = instances.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy');
   const openclawInstances = instances.filter(i => i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy');
   const websiteInstances = instances.filter(i => (i.service_type === 'docker' || i.service_type === 'website') && !i.deleted_at && i.status !== 'pending_deploy');
+  const otherInstances = instances.filter(i => i.service_type === 'other' && !i.deleted_at && i.status !== 'pending_deploy');
 
   const sections = [
     { key: 'n8n',          title: 'n8n',          items: n8nInstances },
     { key: 'openclaw',     title: 'OpenClaw',      items: openclawInstances },
     { key: 'website',      title: 'Website',       items: websiteInstances },
+    { key: 'other',        title: 'Other',         items: otherInstances },
     { key: 'not-deployed', title: 'Not deployed',  items: notDeployed },
   ].filter(s => s.items.length > 0);
 
@@ -181,9 +185,9 @@ export default function HostingPage() {
         {sections.map(section => (
           <div key={section.key}>
             <div className="flex items-center gap-2 mb-4">
-              <span className="flex-shrink-0 text-white/30">{sectionIcon(section.key)}</span>
-              <span className="text-sm font-semibold text-white/30 uppercase tracking-wider">{section.title}</span>
-              <span className="text-xs text-white/30 font-normal">{section.items.length}</span>
+              <span className="flex-shrink-0 text-white/50">{sectionIcon(section.key)}</span>
+              <span className="text-xs font-semibold text-white/50 uppercase tracking-wider">{section.title}</span>
+              <span className="text-xs text-white/25 font-normal">{section.items.length}</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {section.items.map(inst => renderCard(inst))}

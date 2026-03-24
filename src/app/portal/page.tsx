@@ -931,27 +931,25 @@ function PortalPageContent() {
           <div className="flex-1 overflow-y-auto bg-black px-4 py-4 md:px-6 md:py-8 relative">
             <div className="w-full max-w-6xl mx-auto relative z-10">
 
-        {/* Empty state */}
-        {isPreviewMode && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 bg-gray-900/50 border border-gray-800 rounded-2xl flex items-center justify-center mb-4">
-              <Server className="w-8 h-8 text-gray-400" />
+        {/* Empty state notice */}
+        {isPreviewMode && !showContentSkeleton && (
+          <div className="flex items-center gap-3 p-4 mb-6 bg-gray-900/50 border border-gray-800 rounded-xl">
+            <Server className="w-5 h-5 text-white/40 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white">No instances configured</p>
+              <p className="text-sm text-white/60">Head to Hosting to deploy or connect your first instance.</p>
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">No instances yet</h3>
-            <p className="text-white/60 text-base mb-6 max-w-sm mx-auto">
-              Deploy your first instance to start managing clients.
-            </p>
             <Link
               href="/portal/hosting"
-              className="px-4 py-3 bg-white text-black hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors"
+              className="px-3 py-1.5 bg-white text-black hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
             >
               Go to Hosting
             </Link>
           </div>
         )}
 
-        {/* Content - only show when not in preview mode */}
-        {!isPreviewMode && (
+        {/* Content */}
+        {(
           <>
         {/* Content */}
         {showContentSkeleton ? (

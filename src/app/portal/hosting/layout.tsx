@@ -7,7 +7,7 @@ import { usePortalRoleContext } from '@/app/portal/context';
 import { usePortalInstances } from '@/components/portal/usePortalInstances';
 import SecondaryPanel, { SecondaryPanelSection } from '@/components/portal/SecondaryPanel';
 import SearchableSelect from '@/components/ui/SearchableSelect';
-import { Plus, ExternalLink, Server, Globe } from 'lucide-react';
+import { Plus, ExternalLink, Server, Globe, Link2 } from 'lucide-react';
 import DeployInstanceModal, { InstanceConfig, ConnectInstanceConfig } from '@/components/DeployInstanceModal';
 import { HostingContext } from './context';
 
@@ -72,7 +72,8 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
     fetchedRef.current = true;
 
     const token = session.access_token;
-    const activeInstances = instances.filter((i) => !i.is_external && !i.deleted_at && i.status !== 'pending_deploy' && i.service_type);
+    // Skip FlowEngine instances (they poll their own status) and 'other' type (no status endpoint)
+    const activeInstances = instances.filter((i) => !i.is_external && !i.deleted_at && i.status !== 'pending_deploy' && i.service_type && i.platform !== 'flowengine' && i.service_type !== 'other');
 
     if (activeInstances.length === 0) {
       setStatusLoading(false);
@@ -185,7 +186,7 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
       const data = await res.json();
       if (data.success) {
         setDeployOpen(false);
-        try { sessionStorage.removeItem('portal-hosting-instances'); } catch {}
+        try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
         await refetchInstances();
         if (data.instance?.id) {
           router.push(`/portal/hosting/${data.instance.id}`);
@@ -200,9 +201,11 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
     }
   };
 
-  const mapStatus = (inst: { id: string; status: string; is_external?: boolean; deleted_at?: string | null; platform?: string }): 'active' | 'inactive' | 'error' | 'connecting' | 'external' | 'loading' => {
+  const mapStatus = (inst: { id: string; status: string; is_external?: boolean; deleted_at?: string | null; platform?: string; service_type?: string | null }): 'active' | 'inactive' | 'error' | 'connecting' | 'external' | 'loading' => {
     // Deleted or pending instances → show as inactive
     if (inst.deleted_at || inst.status === 'pending_deploy') return 'inactive';
+    // 'other' type = external link, show as external
+    if (inst.service_type === 'other') return 'external';
     // FlowEngine instances use their actual status, not the generic 'external' marker
     if (inst.is_external && inst.platform !== 'flowengine') return 'external';
     // Check for active fake status (action block) - matches N8nAccountPage behavior
@@ -235,6 +238,7 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
     const n8nInstances = filtered.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
     const openclawInstances = filtered.filter(i => !i.is_external && i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
     const websiteInstances = filtered.filter(i => !i.is_external && (i.service_type === 'docker' || i.service_type === 'website') && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
+    const otherInstances = filtered.filter(i => i.service_type === 'other' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
 
     const n8nIcon = (
       <svg fill="currentColor" fillRule="evenodd" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5">
@@ -246,12 +250,17 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
     );
     const websiteIcon = <Globe className="w-5 h-5" />;
 
+    const otherIcon = <Link2 className="w-5 h-5" />;
+
     const mapItem = (i: typeof filtered[0]) => ({
       id: i.id,
       label: i.instance_name,
       sublabel: i.deleted_at ? 'Not deployed' : i.status === 'pending_deploy' ? 'Choose what to deploy' : i.instance_url?.replace('https://', ''),
       status: mapStatus(i),
-      icon: i.service_type === 'openclaw' ? openclawIcon : i.service_type === 'docker' || i.service_type === 'website' ? websiteIcon : n8nIcon,
+      icon: i.service_type === 'openclaw' ? openclawIcon
+          : (i.service_type === 'docker' || i.service_type === 'website') ? websiteIcon
+          : i.service_type === 'other' ? otherIcon
+          : n8nIcon,
     });
 
     const mapPendingItem = (i: typeof filtered[0]) => ({
@@ -273,6 +282,9 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
     }
     if (websiteInstances.length > 0) {
       sections.push({ title: 'Website', icon: <Globe className="w-3.5 h-3.5" />, items: websiteInstances.map(mapItem) });
+    }
+    if (otherInstances.length > 0) {
+      sections.push({ title: 'Other', icon: <Link2 className="w-3.5 h-3.5" />, items: otherInstances.map(mapItem) });
     }
   }
 
@@ -405,7 +417,7 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
         isDeploying={deploying}
         accessToken={session?.access_token}
         onSuccess={() => {
-          try { sessionStorage.removeItem('portal-hosting-instances'); } catch {}
+          try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
           refetchInstances();
         }}
       />

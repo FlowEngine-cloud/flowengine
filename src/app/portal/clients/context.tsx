@@ -12,6 +12,7 @@ export interface ClientInstance {
   client_name?: string;
   client_paid: boolean;
   is_external?: boolean;
+  service_type?: string | null;
   storage_limit_gb?: number;
   invite_status?: string;
 }

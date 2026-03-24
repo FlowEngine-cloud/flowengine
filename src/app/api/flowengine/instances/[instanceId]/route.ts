@@ -53,6 +53,34 @@ export async function GET(
   }
 }
 
+// PATCH — rename instance
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ instanceId: string }> }
+) {
+  try {
+    const user = await authenticate(req);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { instanceId } = await params;
+    const body = await req.json().catch(() => ({}));
+    const { instance_name } = body;
+
+    if (!instance_name || typeof instance_name !== 'string' || !instance_name.trim()) {
+      return NextResponse.json({ error: 'instance_name is required' }, { status: 400 });
+    }
+
+    const settings = await getPortalSettings();
+    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
+    if (!client) return NextResponse.json({ error: 'FlowEngine API key not configured' }, { status: 400 });
+
+    const result = await client.renameInstance(instanceId, instance_name.trim().substring(0, 50));
+    return NextResponse.json(result);
+  } catch (err) {
+    return handleError(err);
+  }
+}
+
 // DELETE — cancel subscription and delete instance
 export async function DELETE(
   req: NextRequest,
