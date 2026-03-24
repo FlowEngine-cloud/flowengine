@@ -17,6 +17,7 @@ interface FlowEngineInstance {
   storage_gb: number;
   status: string;
   billing_cycle: 'monthly' | 'annual';
+  service_type?: 'n8n' | 'openclaw' | 'website';
   created_at: string;
   updated_at?: string;
   is_external?: boolean; // true = user-connected external n8n, not FlowEngine-hosted
@@ -196,6 +197,26 @@ class FlowEngineClient {
   /** Fetch recent logs for a managed n8n instance */
   async getInstanceLogs(id: string, lines = 300): Promise<{ success: boolean; logs: string }> {
     return this.request('GET', `/api/v1/n8n/instances/${id}/logs?lines=${lines}`);
+  }
+
+  /** Get database credentials for a managed n8n instance */
+  async getInstanceCredentials(id: string): Promise<{ success: boolean; credentials: { user: string; password: string; database: string; host: string; port: number } }> {
+    return this.request('GET', `/api/v1/n8n/instances/${id}/credentials`);
+  }
+
+  /** Execute a SQL command against the instance's PostgreSQL database */
+  async executeTerminal(id: string, command: string): Promise<{ success: boolean; output: string }> {
+    return this.request('POST', `/api/v1/n8n/instances/${id}/terminal`, { command });
+  }
+
+  /** List backups for a managed n8n instance */
+  async listBackups(id: string): Promise<{ success: boolean; backups: Array<{ id: string; fileName: string; fileSizeBytes: number; status: string; createdAt: string }> }> {
+    return this.request('GET', `/api/v1/n8n/instances/${id}/backups`);
+  }
+
+  /** Create a backup for a managed n8n instance */
+  async createBackup(id: string): Promise<{ success: boolean; backup: { id: string; fileName: string; fileSizeBytes?: number; status: string } }> {
+    return this.request('POST', `/api/v1/n8n/instances/${id}/backups`, {});
   }
 
   // ==========================================

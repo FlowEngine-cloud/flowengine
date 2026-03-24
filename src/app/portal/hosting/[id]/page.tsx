@@ -11,13 +11,13 @@ import { useAuth } from '@/components/AuthContext';
 import { usePortalInstances, PortalInstance } from '@/components/portal/usePortalInstances';
 import N8nAccountPage from '@/app/n8n-account/page';
 import { useHostingContext } from '../context';
-import { Server, Loader2, ChevronRight, ExternalLink, Play, Square, RotateCcw, Trash2, Globe, RefreshCw, Terminal, History, Pencil, Check, X, Link2, Users, Plus } from 'lucide-react';
+import { Server, Loader2, ChevronRight, ExternalLink, Play, Square, RotateCcw, Trash2, Globe, RefreshCw, Terminal, History, Pencil, Check, X, Link2, Users, Plus, Eye, EyeOff, Copy, Database, HardDrive } from 'lucide-react';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { cn } from '@/lib/utils';
 
 function ServiceIcon({ serviceType, className = 'w-5 h-5' }: { serviceType?: string | null; className?: string }) {
   if (serviceType === 'openclaw') return <img src="/logos/openclaw.png" className={`${className} object-contain rounded`} alt="OpenClaw" />;
-  if (serviceType === 'docker' || serviceType === 'website') return <Globe className={className + ' text-white/60'} />;
+  if (serviceType === 'website') return <Globe className={className + ' text-white/60'} />;
   if (serviceType === 'n8n') return <img src="/logos/n8n.svg" className={className + ' object-contain'} alt="n8n" style={{ filter: 'brightness(0) invert(1) opacity(0.7)' }} />;
   if (serviceType === 'other') return <Link2 className={className + ' text-white/60'} />;
   return <Server className={className + ' text-white/30'} />;
@@ -173,6 +173,40 @@ function FlowEngineInstanceDetail({ instance, onDeleted, onRenamed }: { instance
 
   const [fakeStatus, setFakeStatus] = useState<string | null>(null);
 
+  // Database Credentials state (n8n only)
+  const [credsOpen, setCredsOpen] = useState(false);
+  const [credsRevealed, setCredsRevealed] = useState(false);
+  const [credsLoading, setCredsLoading] = useState(false);
+  const [creds, setCreds] = useState<{ user: string; password: string; database: string; host: string; port: number } | null>(null);
+  const [credsError, setCredsError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // SQL Terminal state (n8n only)
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [sqlInput, setSqlInput] = useState('');
+  const [terminalOutput, setTerminalOutput] = useState<string | null>(null);
+  const [terminalLoading, setTerminalLoading] = useState(false);
+  const [terminalError, setTerminalError] = useState<string | null>(null);
+
+  // Backups state
+  const [backupsOpen, setBackupsOpen] = useState(false);
+  const [backups, setBackups] = useState<Array<{ id: string; fileName: string; fileSizeBytes: number; status: string; createdAt: string }> | null>(null);
+  const [backupsLoading, setBackupsLoading] = useState(false);
+  const [creatingBackup, setCreatingBackup] = useState(false);
+  const [backupsError, setBackupsError] = useState<string | null>(null);
+
+  // Client assignment (owner only)
+  type ClientAssignment = { user_id: string; client_email: string; client_name?: string };
+  const [clientAssignments, setClientAssignments] = useState<ClientAssignment[]>([]);
+  const [allAgencyClients, setAllAgencyClients] = useState<ClientAssignment[]>([]);
+  const [clientsLoaded, setClientsLoaded] = useState(false);
+  const [showAssignClientForm, setShowAssignClientForm] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [assigningClient, setAssigningClient] = useState(false);
+  const [assignClientError, setAssignClientError] = useState<string | null>(null);
+  const [revokingClientId, setRevokingClientId] = useState<string | null>(null);
+
   // Read fake action block from localStorage on mount (can't access during SSR)
   useEffect(() => {
     try {
@@ -239,11 +273,167 @@ function FlowEngineInstanceDetail({ instance, onDeleted, onRenamed }: { instance
     return () => { mounted = false; clearInterval(interval); };
   }, [session?.access_token, instance.id, fakeStatus, actionLoading]);
 
+  // Load client assignments (owner only)
+  useEffect(() => {
+    if (!session?.access_token || clientsLoaded || instance.access !== 'owner') return;
+    const load = async () => {
+      try {
+        const res = await fetch('/api/client/instances', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const instances: any[] = data.instances || [];
+        const seenIds = new Set<string>();
+        const all: { user_id: string; client_email: string; client_name?: string }[] = [];
+        for (const ci of instances) {
+          if (!ci.user_id || ci.user_id.startsWith('pending:')) continue;
+          if (seenIds.has(ci.user_id)) continue;
+          seenIds.add(ci.user_id);
+          all.push({ user_id: ci.user_id, client_email: ci.client_email || ci.user_id, client_name: ci.client_name });
+        }
+        setAllAgencyClients(all);
+        const assigned = instances
+          .filter(ci => ci.instance_id === instance.id && !ci.user_id?.startsWith('pending:') && !ci.client_paid)
+          .map(ci => ({ user_id: ci.user_id, client_email: ci.client_email || ci.user_id, client_name: ci.client_name }));
+        setClientAssignments(assigned);
+      } catch { /* silent */ } finally {
+        setClientsLoaded(true);
+      }
+    };
+    load();
+  }, [session?.access_token, clientsLoaded, instance.id, instance.access]);
+
   const displayStatus = fakeStatus || detail?.status || instance.status;
   const sc = STATUS_CONFIG[displayStatus] ?? { label: displayStatus, cls: 'text-gray-400 bg-gray-800/30 border-gray-700' };
   const isTransitioning = !!(fakeStatus) || ['provisioning', 'starting', 'stopping', 'restarting'].includes(displayStatus);
   const isRunning = displayStatus === 'running';
   const isStopped = ['stopped', 'error'].includes(displayStatus);
+  const isN8n = instance.service_type === 'n8n' || !instance.service_type;
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    }).catch(() => {});
+  };
+
+  const handleRevealCredentials = async () => {
+    if (creds) { setCredsRevealed(true); return; }
+    if (!session?.access_token) return;
+    setCredsLoading(true);
+    setCredsError(null);
+    try {
+      const res = await fetch(`/api/flowengine/instances/${instance.id}/credentials`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) { setCredsError(data.message || data.error || 'Failed to fetch credentials'); return; }
+      setCreds(data.credentials);
+      setCredsRevealed(true);
+    } catch {
+      setCredsError('Failed to fetch credentials.');
+    } finally {
+      setCredsLoading(false);
+    }
+  };
+
+  const handleRunSQL = async () => {
+    if (!session?.access_token || !sqlInput.trim()) return;
+    setTerminalLoading(true);
+    setTerminalError(null);
+    setTerminalOutput(null);
+    try {
+      const res = await fetch(`/api/flowengine/instances/${instance.id}/terminal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ command: sqlInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setTerminalError(data.message || data.error || 'Command failed'); return; }
+      setTerminalOutput(data.output ?? '(no output)');
+    } catch {
+      setTerminalError('Failed to execute command.');
+    } finally {
+      setTerminalLoading(false);
+    }
+  };
+
+  const fetchBackups = async () => {
+    if (!session?.access_token) return;
+    setBackupsLoading(true);
+    setBackupsError(null);
+    try {
+      const res = await fetch(`/api/flowengine/instances/${instance.id}/backups`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) { setBackupsError(data.message || data.error || 'Failed to list backups'); return; }
+      setBackups(data.backups ?? []);
+    } catch {
+      setBackupsError('Failed to fetch backups.');
+    } finally {
+      setBackupsLoading(false);
+    }
+  };
+
+  const handleCreateBackup = async () => {
+    if (!session?.access_token) return;
+    setCreatingBackup(true);
+    setBackupsError(null);
+    try {
+      const res = await fetch(`/api/flowengine/instances/${instance.id}/backups`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) { setBackupsError(data.message || data.error || 'Backup failed'); return; }
+      // Refresh list
+      await fetchBackups();
+    } catch {
+      setBackupsError('Failed to create backup.');
+    } finally {
+      setCreatingBackup(false);
+    }
+  };
+
+  const handleAssignClient = async () => {
+    if (!session?.access_token || !selectedClientId) return;
+    setAssigningClient(true);
+    setAssignClientError(null);
+    try {
+      const res = await fetch('/api/client/instances', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ instance_id: instance.id, client_user_id: selectedClientId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setAssignClientError(data.error || 'Failed to assign client'); return; }
+      const client = allAgencyClients.find(c => c.user_id === selectedClientId);
+      if (client) setClientAssignments(prev => [...prev, client]);
+      setShowAssignClientForm(false);
+      setSelectedClientId('');
+    } catch {
+      setAssignClientError('Failed to assign client');
+    } finally {
+      setAssigningClient(false);
+    }
+  };
+
+  const handleRevokeClient = async (clientUserId: string) => {
+    if (!session?.access_token) return;
+    setRevokingClientId(clientUserId);
+    try {
+      const res = await fetch('/api/client/instances', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ instance_id: instance.id, user_id: clientUserId }),
+      });
+      if (res.ok) setClientAssignments(prev => prev.filter(c => c.user_id !== clientUserId));
+    } catch { /* silent */ } finally {
+      setRevokingClientId(null);
+    }
+  };
 
   const setFakeBlock = (action: 'start' | 'stop' | 'restart') => {
     const durations = { start: 50_000, stop: 8_000, restart: 30_000 };
@@ -424,6 +614,271 @@ function FlowEngineInstanceDetail({ instance, onDeleted, onRenamed }: { instance
 
         {/* Logs */}
         <LogsSection instanceId={instance.id} logsUrl={`/api/flowengine/instances/${instance.id}/logs`} token={session?.access_token ?? ''} />
+
+        {/* Database Credentials — n8n only */}
+        {isN8n && (
+          <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden">
+            <button
+              onClick={() => {
+                const next = !credsOpen;
+                setCredsOpen(next);
+              }}
+              className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-800/30 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-white/60" />
+                <span className="text-sm font-medium text-white">Database Credentials</span>
+              </div>
+              <ChevronRight className={`w-4 h-4 text-white/30 transition-transform ${credsOpen ? 'rotate-90' : ''}`} />
+            </button>
+            {credsOpen && (
+              <div className="border-t border-gray-800 p-5 space-y-4">
+                {!credsRevealed ? (
+                  <button
+                    onClick={handleRevealCredentials}
+                    disabled={credsLoading}
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white/80 hover:text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    {credsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                    Reveal Credentials
+                  </button>
+                ) : creds ? (
+                  <div className="space-y-3">
+                    {([
+                      { label: 'Host', value: creds.host, field: 'host' },
+                      { label: 'Port', value: String(creds.port), field: 'port' },
+                      { label: 'Database', value: creds.database, field: 'database' },
+                      { label: 'User', value: creds.user, field: 'user' },
+                    ] as { label: string; value: string; field: string }[]).map(({ label, value, field }) => (
+                      <div key={field} className="flex items-center justify-between gap-3 bg-gray-800/40 rounded-lg px-3 py-2">
+                        <span className="text-xs text-white/50 w-20 shrink-0">{label}</span>
+                        <span className="text-sm text-white font-mono flex-1 truncate">{value}</span>
+                        <button
+                          onClick={() => copyToClipboard(value, field)}
+                          className="p-1 rounded hover:bg-gray-700 text-white/30 hover:text-white/60 transition-colors shrink-0"
+                          title="Copy"
+                        >
+                          {copiedField === field ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between gap-3 bg-gray-800/40 rounded-lg px-3 py-2">
+                      <span className="text-xs text-white/50 w-20 shrink-0">Password</span>
+                      <span className="text-sm text-white font-mono flex-1 truncate">
+                        {showPassword ? creds.password : '••••••••••••'}
+                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => setShowPassword(p => !p)}
+                          className="p-1 rounded hover:bg-gray-700 text-white/30 hover:text-white/60 transition-colors"
+                          title={showPassword ? 'Hide' : 'Show'}
+                        >
+                          {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          onClick={() => copyToClipboard(creds.password, 'password')}
+                          className="p-1 rounded hover:bg-gray-700 text-white/30 hover:text-white/60 transition-colors"
+                          title="Copy"
+                        >
+                          {copiedField === 'password' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                {credsError && <p className="text-sm text-red-400">{credsError}</p>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SQL Terminal — n8n only */}
+        {isN8n && (
+          <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setTerminalOpen(o => !o)}
+              className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-800/30 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-white/60" />
+                <span className="text-sm font-medium text-white">SQL Terminal</span>
+              </div>
+              <ChevronRight className={`w-4 h-4 text-white/30 transition-transform ${terminalOpen ? 'rotate-90' : ''}`} />
+            </button>
+            {terminalOpen && (
+              <div className="border-t border-gray-800 p-5 space-y-3">
+                <textarea
+                  value={sqlInput}
+                  onChange={e => setSqlInput(e.target.value)}
+                  placeholder="SELECT * FROM workflow_entity LIMIT 10;"
+                  rows={4}
+                  className="w-full px-3 py-2 bg-black/40 border border-gray-700 rounded-lg text-sm text-green-400 font-mono placeholder-white/20 focus:outline-none focus:border-gray-500 resize-y"
+                />
+                <button
+                  onClick={handleRunSQL}
+                  disabled={terminalLoading || !sqlInput.trim()}
+                  className="flex items-center gap-2 px-3 py-2 bg-green-900/20 text-green-400 border border-green-800 hover:bg-green-900/30 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  {terminalLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                  Run
+                </button>
+                {terminalError && <p className="text-sm text-red-400">{terminalError}</p>}
+                {terminalOutput !== null && (
+                  <pre className="p-3 text-sm text-green-400 font-mono overflow-x-auto whitespace-pre-wrap max-h-64 overflow-y-auto bg-black/30 rounded-lg border border-gray-800">
+                    {terminalOutput}
+                  </pre>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Backups */}
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden">
+          <button
+            onClick={() => {
+              const next = !backupsOpen;
+              setBackupsOpen(next);
+              if (next && backups === null) fetchBackups();
+            }}
+            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-800/30 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <HardDrive className="w-4 h-4 text-white/60" />
+              <span className="text-sm font-medium text-white">Backups</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {backupsOpen && (
+                <button
+                  onClick={e => { e.stopPropagation(); fetchBackups(); }}
+                  className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-gray-200 transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <ChevronRight className={`w-4 h-4 text-white/30 transition-transform ${backupsOpen ? 'rotate-90' : ''}`} />
+            </div>
+          </button>
+          {backupsOpen && (
+            <div className="border-t border-gray-800">
+              <div className="p-4 flex items-center justify-between">
+                <span className="text-xs text-white/50">{backups ? `${backups.length} backup${backups.length !== 1 ? 's' : ''}` : ''}</span>
+                <button
+                  onClick={handleCreateBackup}
+                  disabled={creatingBackup || backupsLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-900/20 text-blue-400 border border-blue-800 hover:bg-blue-900/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                >
+                  {creatingBackup ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                  Create Backup
+                </button>
+              </div>
+              {backupsError && <p className="px-4 pb-3 text-sm text-red-400">{backupsError}</p>}
+              {backupsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-5 h-5 animate-spin text-white/30" />
+                </div>
+              ) : backups !== null && backups.length === 0 ? (
+                <p className="px-4 pb-4 text-sm text-white/40">No backups yet.</p>
+              ) : backups !== null ? (
+                <div className="divide-y divide-gray-800">
+                  {backups.map(b => (
+                    <div key={b.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white font-mono truncate">{b.fileName}</p>
+                        <p className="text-xs text-white/40 mt-0.5">
+                          {b.fileSizeBytes > 0 ? `${(b.fileSizeBytes / 1024).toFixed(1)} KB · ` : ''}
+                          {new Date(b.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border shrink-0 ${
+                        b.status === 'completed' ? 'text-green-400 bg-green-900/20 border-green-800' :
+                        b.status === 'failed' ? 'text-red-400 bg-red-900/20 border-red-800' :
+                        'text-yellow-400 bg-yellow-900/20 border-yellow-800'
+                      }`}>
+                        {b.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
+
+        {/* Assigned Clients — owner only */}
+        {instance.access === 'owner' && (
+          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-white">Assigned Clients</p>
+              {clientsLoaded && !showAssignClientForm && allAgencyClients.filter(c => !clientAssignments.some(a => a.user_id === c.user_id)).length > 0 && (
+                <button
+                  onClick={() => setShowAssignClientForm(true)}
+                  className="flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors"
+                >
+                  <Plus className="w-3 h-3" /> Assign
+                </button>
+              )}
+            </div>
+
+            {showAssignClientForm && (
+              <div className="space-y-3">
+                <SearchableSelect
+                  value={selectedClientId}
+                  onChange={setSelectedClientId}
+                  placeholder="Select a client..."
+                  options={[
+                    { value: '', label: 'Select a client...' },
+                    ...allAgencyClients
+                      .filter(c => !clientAssignments.some(a => a.user_id === c.user_id))
+                      .map(c => ({ value: c.user_id, label: c.client_name ? `${c.client_name} (${c.client_email})` : c.client_email }))
+                  ]}
+                />
+                {assignClientError && <p className="text-xs text-red-400">{assignClientError}</p>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAssignClient}
+                    disabled={!selectedClientId || assigningClient}
+                    className="px-3 py-2 bg-white text-black hover:bg-gray-100 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    {assigningClient ? 'Assigning...' : 'Assign'}
+                  </button>
+                  <button
+                    onClick={() => { setShowAssignClientForm(false); setSelectedClientId(''); setAssignClientError(null); }}
+                    className="px-3 py-2 border border-gray-700 hover:bg-gray-700 text-white/60 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!clientsLoaded ? (
+              <Loader2 className="w-4 h-4 animate-spin text-white/30" />
+            ) : clientAssignments.length === 0 ? (
+              <p className="text-sm text-white/40">No clients assigned</p>
+            ) : (
+              <div className="space-y-2">
+                {clientAssignments.map(c => (
+                  <div key={c.user_id} className="flex items-center gap-3 p-3 bg-gray-900/50 border border-gray-800 rounded-lg">
+                    <Users className="w-4 h-4 text-white/30 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      {c.client_name && <p className="text-sm font-medium text-white truncate">{c.client_name}</p>}
+                      <p className="text-sm text-white/60 truncate">{c.client_email}</p>
+                    </div>
+                    <button
+                      onClick={() => handleRevokeClient(c.user_id)}
+                      disabled={revokingClientId === c.user_id}
+                      className="p-1.5 rounded-lg hover:bg-red-900/30 text-white/20 hover:text-red-400 transition-colors disabled:opacity-50"
+                      title="Revoke access"
+                    >
+                      {revokingClientId === c.user_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Danger zone */}
         <div className="bg-gray-900/50 border border-red-800 rounded-lg p-5">
@@ -1200,15 +1655,6 @@ const deploymentTypes = [
     iconStyle: undefined as React.CSSProperties | undefined,
     available: true,
   },
-  {
-    id: 'mcp-bridge' as string,
-    label: 'MCP Bridge',
-    description: 'Model context protocol server',
-    iconSrc: null as string | null,
-    iconClass: '',
-    iconStyle: undefined as React.CSSProperties | undefined,
-    available: false,
-  },
 ];
 
 export default function HostingDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -1417,7 +1863,7 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
   }
 
   // Website / Docker instances get their own detail component
-  if (!isPending && (instance?.service_type === 'docker' || instance?.service_type === 'website')) {
+  if (!isPending && instance?.service_type === 'website') {
     return <WebsiteInstanceDetail instance={instance} onDeleted={handleInstanceDeleted} />;
   }
 

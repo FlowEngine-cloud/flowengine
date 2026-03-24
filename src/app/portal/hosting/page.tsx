@@ -25,7 +25,7 @@ function openclawImg(cls: string) {
 function serviceCardIcon(serviceType: string | null | undefined) {
   if (!serviceType) return <Server className="w-4 h-4 text-white/30" />;
   if (serviceType === 'openclaw') return openclawImg('w-6 h-6');
-  if (serviceType === 'docker' || serviceType === 'website') return <Globe className="w-5 h-5 text-white/60" />;
+  if (serviceType === 'website') return <Globe className="w-5 h-5 text-white/60" />;
   if (serviceType === 'other') return <Link2 className="w-5 h-5 text-white/60" />;
   return n8nSvg('w-5 h-5');
 }
@@ -170,7 +170,7 @@ export default function HostingPage() {
   const notDeployed = managed.filter(i => !i.service_type || i.deleted_at || i.status === 'pending_deploy');
   const n8nInstances = managed.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy');
   const openclawInstances = managed.filter(i => i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy');
-  const websiteInstances = managed.filter(i => (i.service_type === 'docker' || i.service_type === 'website') && !i.deleted_at && i.status !== 'pending_deploy');
+  const websiteInstances = managed.filter(i => i.service_type === 'website' && !i.deleted_at && i.status !== 'pending_deploy');
   const otherInstances = managed.filter(i => i.service_type === 'other' && !i.deleted_at && i.status !== 'pending_deploy');
 
   const sections = [

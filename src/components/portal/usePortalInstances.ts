@@ -16,7 +16,7 @@ export interface PortalInstance {
   is_external?: boolean;
   access: 'owner' | 'manager' | 'client';
   deleted_at?: string | null;
-  service_type?: 'n8n' | 'openclaw' | 'docker' | 'website' | 'mcp_bridge' | 'vps' | 'other' | null;
+  service_type?: 'n8n' | 'openclaw' | 'website' | 'other' | null;
   stripe_subscription_id?: string | null;
   platform?: 'flowengine';
 }
@@ -40,8 +40,8 @@ function setCache(data: PortalInstance[]) {
 }
 
 export function usePortalInstances() {
-  const { user, session, loading: authLoading } = useAuth();
-  const { ownerId, isTeamMember, loading: teamLoading } = useTeamContext();
+  const { user, loading: authLoading } = useAuth();
+  const { ownerId, loading: teamLoading } = useTeamContext();
   const [instances, setInstances] = useState<PortalInstance[]>(() => getCache() || []);
   const [loading, setLoading] = useState(!getCache());
 
@@ -92,7 +92,7 @@ export function usePortalInstances() {
         is_external: d.is_external || false,
         access: d.user_id === effectiveId ? 'owner' as const : 'manager' as const,
         deleted_at: d.deleted_at,
-        service_type: d.service_type || null,
+        service_type: d.service_type === 'docker' ? 'website' : (d.service_type || null),
         stripe_subscription_id: d.stripe_subscription_id || null,
       };
     });
@@ -129,7 +129,7 @@ export function usePortalInstances() {
           source: 'pay_per_instance' as const,
           is_external: inst.is_external || false,
           access: 'client' as const,
-          service_type: inst.service_type || null,
+          service_type: inst.service_type === 'docker' ? 'website' : (inst.service_type || null),
         };
       });
 

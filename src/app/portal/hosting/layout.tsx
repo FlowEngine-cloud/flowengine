@@ -83,7 +83,7 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
     Promise.allSettled(
       activeInstances.map(async (inst) => {
         const isOpenClaw = inst.service_type === 'openclaw';
-        const isDocker = inst.service_type === 'docker' || inst.service_type === 'website';
+        const isDocker = inst.service_type === 'website';
         const url = isOpenClaw
           ? `/api/openclaw/${inst.id}/status`
           : isDocker
@@ -238,7 +238,7 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
     const pendingInstances = filtered.filter(i => !i.is_external && (!i.service_type || i.deleted_at || i.status === 'pending_deploy' || !KNOWN_TYPES.has(i.service_type!))).sort((a, b) => a.instance_name.localeCompare(b.instance_name));
     const n8nInstances = filtered.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
     const openclawInstances = filtered.filter(i => !i.is_external && i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
-    const websiteInstances = filtered.filter(i => !i.is_external && (i.service_type === 'docker' || i.service_type === 'website') && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
+    const websiteInstances = filtered.filter(i => !i.is_external && i.service_type === 'website' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
     const otherInstances = filtered.filter(i => i.service_type === 'other' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
 
     const n8nIcon = (
@@ -259,7 +259,7 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
       sublabel: i.deleted_at ? 'Not deployed' : i.status === 'pending_deploy' ? 'Choose what to deploy' : i.instance_url?.replace('https://', ''),
       status: mapStatus(i),
       icon: i.service_type === 'openclaw' ? openclawIcon
-          : (i.service_type === 'docker' || i.service_type === 'website') ? websiteIcon
+          : i.service_type === 'website' ? websiteIcon
           : i.service_type === 'other' ? otherIcon
           : n8nIcon,
     });
