@@ -20,6 +20,7 @@ interface InstanceData {
   created_at: string;
   service_type: string | null;
   n8n_api_key?: string | null;
+  is_external?: boolean;
 }
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
@@ -43,7 +44,7 @@ export default function N8nAccountPage({ focusInstanceId }: N8nAccountPageProps)
     if (!focusInstanceId) { setLoading(false); return; }
     supabase
       .from('pay_per_instance_deployments')
-      .select('id, instance_name, instance_url, status, storage_limit_gb, created_at, service_type, n8n_api_key')
+      .select('id, instance_name, instance_url, status, storage_limit_gb, created_at, service_type, n8n_api_key, is_external')
       .eq('id', focusInstanceId)
       .maybeSingle()
       .then(({ data }) => {
@@ -125,7 +126,7 @@ export default function N8nAccountPage({ focusInstanceId }: N8nAccountPageProps)
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {(instance.storage_limit_gb ?? 0) > 0 && (
+          {!instance.is_external && (instance.storage_limit_gb ?? 0) > 0 && (
             <div className="bg-gray-800/30 rounded-lg p-3">
               <p className="text-xs text-white/40 mb-1">Storage</p>
               <p className="text-white font-medium">{instance.storage_limit_gb} GB</p>

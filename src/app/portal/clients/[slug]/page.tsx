@@ -1520,14 +1520,14 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
               </div>
             )}
 
-            {realInstances.length === 0 ? (
+            {realInstances.filter(i => !i.is_external).length === 0 ? (
               <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 flex flex-col items-center text-center">
                 <Server className="w-8 h-8 text-white/20 mb-2" />
                 <p className="text-sm text-white/40">No instances linked to this client.</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {realInstances.map((inst) => {
+                {realInstances.filter(i => !i.is_external).map((inst) => {
                   const isConfirming = revokeConfirm === inst.instance_id;
                   return (
                     <div key={inst.instance_id} className="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden">
