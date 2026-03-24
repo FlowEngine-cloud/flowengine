@@ -63,8 +63,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── n8n via FlowEngine API ───────────────────────────────────────────────
-    if (serviceType === 'n8n') {
+    // ── n8n / OpenClaw via FlowEngine API ───────────────────────────────────────────────
+    if (serviceType === 'n8n' || serviceType === 'openclaw') {
       const settings = await getPortalSettings();
       const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
 
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
             status: 'provisioning',
             instance_url: provisioned.instance_url ?? null,
             platform: 'flowengine',
-            service_type: 'n8n',
+            service_type: serviceType,
           })
           .eq('id', instanceId);
 
