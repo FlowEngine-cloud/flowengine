@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const DEMO_MODE = process.env.DEMO_MODE === 'true';
-
 // API routes that are safe to allow even in demo mode (reads + auth)
 const DEMO_ALLOWLIST = [
   '/api/auth',
@@ -18,7 +16,8 @@ const DEMO_ALLOWLIST = [
 ];
 
 export function middleware(req: NextRequest) {
-  if (!DEMO_MODE) return NextResponse.next();
+  // Check per-request so runtime env var changes take effect without rebuild
+  if (process.env.DEMO_MODE !== 'true') return NextResponse.next();
 
   const { pathname } = req.nextUrl;
   const { method } = req;
