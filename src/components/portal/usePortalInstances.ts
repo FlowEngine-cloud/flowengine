@@ -56,7 +56,7 @@ export function usePortalInstances() {
       // Include deleted instances (deleted_at set) — they still have active subscriptions and can be redeployed
       supabase
         .from('pay_per_instance_deployments')
-        .select('id, instance_name, instance_url, status, storage_limit_gb, created_at, is_external, user_id, invited_by_user_id, deleted_at, stripe_subscription_id, service_type, platform')
+        .select('id, instance_name, instance_url, status, storage_limit_gb, created_at, is_external, user_id, invited_by_user_id, deleted_at, stripe_subscription_id, service_type')
         .or(`user_id.eq.${effectiveId},invited_by_user_id.eq.${effectiveId}`)
         .neq('subscription_status', 'canceled')
         .order('created_at', { ascending: false }),
@@ -94,7 +94,6 @@ export function usePortalInstances() {
         deleted_at: d.deleted_at,
         service_type: d.service_type === 'docker' ? 'website' : (d.service_type || null),
         stripe_subscription_id: d.stripe_subscription_id || null,
-        platform: d.platform === 'flowengine' ? 'flowengine' as const : undefined,
       };
     });
 
