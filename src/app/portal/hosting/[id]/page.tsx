@@ -12,7 +12,7 @@ import { usePortalInstances, PortalInstance } from '@/components/portal/usePorta
 import N8nAccountPage from '@/app/n8n-account/page';
 import { useHostingContext } from '../context';
 import { Server, Loader2, ChevronRight, ExternalLink, Play, Square, RotateCcw, Trash2, Globe, RefreshCw, Terminal, History, Pencil, Check, X, Link2, Users, Plus, Eye, EyeOff, Copy, Database, HardDrive } from 'lucide-react';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import { cn } from '@/lib/utils';
 
 function ServiceIcon({ serviceType, className = 'w-5 h-5' }: { serviceType?: string | null; className?: string }) {

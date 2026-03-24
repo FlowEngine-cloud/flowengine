@@ -26,7 +26,7 @@ const DEFAULT_STYLES = {
 };
 
 export function WidgetInlinePreview({ widget }: { widget: Widget }) {
-  const styles = { ...DEFAULT_STYLES, ...(widget.styles || {}) };
+  const styles: Record<string, any> = { ...DEFAULT_STYLES, ...(widget.styles || {}) };
   const borderRadius = typeof styles.borderRadius === 'string'
     ? parseInt(styles.borderRadius)
     : (styles.borderRadius || 12);

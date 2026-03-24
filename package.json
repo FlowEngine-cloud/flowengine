@@ -47,6 +47,10 @@
     "uuid": "^11.1.0",
     "zod": "^3.25.76"
   },
+  "overrides": {
+    "motion-dom": "12.23.7",
+    "motion-utils": "12.23.6"
+  },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4.1.13",
