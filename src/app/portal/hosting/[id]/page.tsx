@@ -869,45 +869,33 @@ function WebsiteInstanceDetail({ instance, onDeleted }: { instance: PortalInstan
         {/* Assigned Clients */}
         <ClientAssignmentSection instanceId={instance.id} access={instance.access} />
 
-        {/* Danger zone */}
+        {/* Delete */}
         {instance.access === 'owner' && (
-          <div className="bg-gray-900/50 border border-red-800 rounded-lg p-5">
-            <p className="text-sm font-medium text-white mb-1">Danger Zone</p>
-            <p className="text-sm text-white/60 mb-4">Permanently delete this instance.</p>
-            {!showDeleteConfirm ? (
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-1.5 px-3 py-2 bg-red-900/20 text-red-400 border border-red-800 hover:bg-red-900/30 rounded-lg text-sm font-medium transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete Instance
-              </button>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-red-400">
-                  This will permanently delete <span className="font-semibold">{instance.instance_name}</span>. This cannot be undone.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                  >
-                    {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    Yes, Delete
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(false)}
-                    disabled={deleting}
-                    className="px-3 py-2 bg-gray-800 text-white/60 hover:text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-                {deleteError && <p className="text-sm text-red-400">{deleteError}</p>}
+          !showDeleteConfirm ? (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-red-400/50 hover:text-red-400 rounded-lg text-sm transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Instance
+            </button>
+          ) : (
+            <div className="bg-gray-900/50 border border-red-900/60 rounded-lg p-4 space-y-3">
+              <p className="text-sm text-red-400">
+                Permanently delete <span className="font-semibold">{instance.instance_name}</span>? This cannot be undone.
+              </p>
+              <div className="flex gap-2">
+                <button onClick={handleDelete} disabled={deleting} className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+                  {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Yes, Delete
+                </button>
+                <button onClick={() => setShowDeleteConfirm(false)} disabled={deleting} className="px-3 py-2 bg-gray-800 text-white/60 hover:text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+                  Cancel
+                </button>
               </div>
-            )}
-          </div>
+              {deleteError && <p className="text-sm text-red-400">{deleteError}</p>}
+            </div>
+          )
         )}
 
       </div>
@@ -1170,44 +1158,33 @@ function ExternalInstanceDetail({ instance, onDeleted }: { instance: PortalInsta
         {/* Assigned Clients */}
         <ClientAssignmentSection instanceId={instance.id} access={instance.access} />
 
-        {/* Danger Zone */}
+        {/* Remove */}
         {isOwner && (
-          <div className="bg-gray-900/50 border border-red-800 rounded-lg p-5">
-            <p className="text-sm font-medium text-white mb-1">Danger Zone</p>
-            <p className="text-sm text-white/60 mb-4">
-              Remove <span className="font-semibold">{currentName}</span> from your portal. This does not affect the actual service.
-            </p>
-            {!showDeleteConfirm ? (
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-1.5 px-3 py-2 bg-red-900/20 text-red-400 border border-red-800 hover:bg-red-900/30 rounded-lg text-sm font-medium transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Remove from Portal
-              </button>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                  >
-                    {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    Yes, Remove
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(false)}
-                    disabled={deleting}
-                    className="px-3 py-2 bg-gray-800 text-white/60 hover:text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-                {deleteError && <p className="text-sm text-red-400">{deleteError}</p>}
+          !showDeleteConfirm ? (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-red-400/50 hover:text-red-400 rounded-lg text-sm transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Remove from Portal
+            </button>
+          ) : (
+            <div className="bg-gray-900/50 border border-red-900/60 rounded-lg p-4 space-y-3">
+              <p className="text-sm text-white/60">
+                Remove <span className="font-semibold text-white">{currentName}</span> from your portal? This does not affect the actual service.
+              </p>
+              <div className="flex gap-2">
+                <button onClick={handleDelete} disabled={deleting} className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+                  {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Yes, Remove
+                </button>
+                <button onClick={() => setShowDeleteConfirm(false)} disabled={deleting} className="px-3 py-2 bg-gray-800 text-white/60 hover:text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+                  Cancel
+                </button>
               </div>
-            )}
-          </div>
+              {deleteError && <p className="text-sm text-red-400">{deleteError}</p>}
+            </div>
+          )
         )}
 
       </div>
