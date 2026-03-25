@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePortalInstances, PortalInstance } from '@/components/portal/usePortalInstances';
 import { useAuth } from '@/components/AuthContext';
-import { Server, ExternalLink, Loader2, Plus, Globe, CreditCard, Link2 } from 'lucide-react';
+import { Server, ExternalLink, Loader2, Plus, Globe, CreditCard, Link2, Cloud } from 'lucide-react';
 import { useHostingContext } from './context';
 
 // ─── Service icons (module-level, stable references) ─────────────────────────
@@ -175,18 +175,22 @@ export default function HostingPage() {
 
   // Hide only soft-deleted external instances; active external ones show in their service type section
   const managed = instances.filter(i => !(i.is_external && i.deleted_at));
-  const notDeployed = managed.filter(i => !i.service_type || i.deleted_at || i.status === 'pending_deploy');
-  const n8nInstances = managed.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy');
-  const openclawInstances = managed.filter(i => i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy');
-  const websiteInstances = managed.filter(i => i.service_type === 'website' && !i.deleted_at && i.status !== 'pending_deploy');
-  const otherInstances = managed.filter(i => i.service_type === 'other' && !i.deleted_at && i.status !== 'pending_deploy');
+  // FlowEngine Cloud instances — separate group
+  const flowEngineInstances = managed.filter(i => i.platform === 'flowengine' && !i.deleted_at && i.status !== 'pending_deploy');
+  // Local / self-hosted instances
+  const notDeployed = managed.filter(i => i.platform !== 'flowengine' && (!i.service_type || i.deleted_at || i.status === 'pending_deploy'));
+  const n8nInstances = managed.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy' && i.platform !== 'flowengine');
+  const openclawInstances = managed.filter(i => i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy' && i.platform !== 'flowengine');
+  const websiteInstances = managed.filter(i => i.service_type === 'website' && !i.deleted_at && i.status !== 'pending_deploy' && i.platform !== 'flowengine');
+  const otherInstances = managed.filter(i => i.service_type === 'other' && !i.deleted_at && i.status !== 'pending_deploy' && i.platform !== 'flowengine');
 
-  const sections = [
-    { key: 'n8n',          title: 'n8n',          items: n8nInstances },
-    { key: 'openclaw',     title: 'OpenClaw',      items: openclawInstances },
-    { key: 'website',      title: 'Website',       items: websiteInstances },
-    { key: 'other',        title: 'Other',         items: otherInstances },
-    { key: 'not-deployed', title: 'Not deployed',  items: notDeployed },
+  const sections: Array<{ key: string; title: string; items: typeof managed; icon?: React.ReactNode }> = [
+    { key: 'flowengine',   title: 'FlowEngine Cloud', items: flowEngineInstances, icon: <Cloud className="w-4 h-4" /> },
+    { key: 'n8n',          title: 'n8n',              items: n8nInstances },
+    { key: 'openclaw',     title: 'OpenClaw',         items: openclawInstances },
+    { key: 'website',      title: 'Website',          items: websiteInstances },
+    { key: 'other',        title: 'External',         items: otherInstances },
+    { key: 'not-deployed', title: 'Not deployed',     items: notDeployed },
   ].filter(s => s.items.length > 0);
 
   return (
@@ -195,7 +199,7 @@ export default function HostingPage() {
         {sections.map(section => (
           <div key={section.key}>
             <div className="flex items-center gap-2 mb-4">
-              <span className="flex-shrink-0 text-white/50">{sectionIcon(section.key)}</span>
+              <span className="flex-shrink-0 text-white/50">{section.icon ?? sectionIcon(section.key)}</span>
               <span className="text-xs font-semibold text-white/50 uppercase tracking-wider">{section.title}</span>
               <span className="text-xs text-white/25 font-normal">{section.items.length}</span>
             </div>
