@@ -20,7 +20,6 @@ const ALLOWED_FIELDS = [
   'n8n_smtp_host', 'n8n_smtp_port', 'n8n_smtp_user', 'n8n_smtp_pass', 'n8n_smtp_sender', 'n8n_smtp_ssl',
   'n8n_docker_image', 'n8n_runners_enabled', 'n8n_runner_image',
   'flowengine_api_key',
-  'flowengine_api_url',
   'admin_email',
   'allow_signup', 'enable_google_auth', 'enable_linkedin_auth', 'enable_github_auth',
   'oauth_credentials',

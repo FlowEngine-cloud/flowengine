@@ -33,7 +33,7 @@ export async function GET(
     const lines = Math.min(parseInt(searchParams.get('lines') ?? '300', 10), 1000);
 
     const settings = await getPortalSettings();
-    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
+    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
     if (!client) {
       return new NextResponse('[FlowEngine API key not configured — cannot fetch logs]', { status: 200, headers: { 'Content-Type': 'text/plain' } });
     }

@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     if (!authorized) return NextResponse.json({ error: 'Access denied' }, { status: 403 });
 
     const settings = await getPortalSettings();
-    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
+    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
     if (!client) return NextResponse.json({ sessions: [] });
 
     const sessions = await client.listWhatsAppSessions();

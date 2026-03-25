@@ -46,7 +46,7 @@ export async function GET(
 
     const { instanceId } = await params;
     const settings = await getPortalSettings();
-    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
+    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
     if (!client) return NextResponse.json({ error: 'FlowEngine API key not configured' }, { status: 400 });
 
     const result = await client.listBackups(instanceId);
@@ -69,7 +69,7 @@ export async function POST(
 
     const { instanceId } = await params;
     const settings = await getPortalSettings();
-    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
+    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
     if (!client) return NextResponse.json({ error: 'FlowEngine API key not configured' }, { status: 400 });
 
     const result = await client.createBackup(instanceId);

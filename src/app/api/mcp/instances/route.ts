@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   let flowEngineInstances: any[] = [];
   try {
     const settings = await getPortalSettings();
-    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
+    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
     if (client) {
       const feInstances = await client.listInstances();
       flowEngineInstances = feInstances.map(i => ({

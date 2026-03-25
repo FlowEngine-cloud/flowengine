@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     // ── n8n / OpenClaw via FlowEngine API ───────────────────────────────────────────────
     if (serviceType === 'n8n' || serviceType === 'openclaw') {
       const settings = await getPortalSettings();
-      const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
+      const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
 
       if (!client) {
         return NextResponse.json(
