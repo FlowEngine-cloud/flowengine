@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ inst
 
     const { instanceName } = await params;
     const settings = await getPortalSettings();
-    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
+    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
     if (!client) return NextResponse.json({ error: 'FlowEngine API key not configured' }, { status: 400 });
 
     const session = await client.getWhatsAppSession(instanceName);
@@ -44,7 +44,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ inst
 
     const { instanceName } = await params;
     const settings = await getPortalSettings();
-    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
+    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
     if (!client) return NextResponse.json({ error: 'FlowEngine API key not configured' }, { status: 400 });
 
     const body = await req.json();

@@ -9,6 +9,12 @@
 
 const FLOWENGINE_API_URL = 'https://flowengine.cloud';
 
+/** Normalize a base URL: strip trailing slash, default to cloud URL if empty */
+function normalizeBaseUrl(url?: string): string {
+  const trimmed = (url || '').trim().replace(/\/+$/, '');
+  return trimmed || FLOWENGINE_API_URL;
+}
+
 // Matches the actual API response shape from /api/v1/n8n/instances
 interface FlowEngineInstance {
   id: string;
@@ -72,9 +78,9 @@ class FlowEngineClient {
   private apiKey: string;
   private baseUrl: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, baseUrl?: string) {
     this.apiKey = apiKey;
-    this.baseUrl = FLOWENGINE_API_URL;
+    this.baseUrl = normalizeBaseUrl(baseUrl);
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -256,11 +262,12 @@ class FlowEngineClient {
   }
 }
 
-/** Create a FlowEngine client from an API key or FLOWENGINE_API_KEY env var */
-export function createFlowEngineClient(apiKey?: string): FlowEngineClient | null {
+/** Create a FlowEngine client from an API key (and optional base URL override) */
+export function createFlowEngineClient(apiKey?: string, baseUrl?: string): FlowEngineClient | null {
   const key = (apiKey || process.env.FLOWENGINE_API_KEY || '').trim();
   if (!key) return null;
-  return new FlowEngineClient(key);
+  const url = baseUrl || process.env.FLOWENGINE_API_URL;
+  return new FlowEngineClient(key, url);
 }
 
 export { FlowEngineClient, FlowEngineApiError };

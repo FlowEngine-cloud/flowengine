@@ -42,7 +42,7 @@ export async function POST(
     }
 
     const settings = await getPortalSettings();
-    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
+    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
     if (!client) return NextResponse.json({ error: 'FlowEngine API key not configured' }, { status: 400 });
 
     const result = await client.manageInstance(instanceId, action as 'start' | 'stop' | 'restart');

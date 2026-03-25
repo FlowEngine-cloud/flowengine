@@ -30,7 +30,7 @@ async function resolveInstance(userId: string, instanceId: string) {
   // Try FlowEngine
   try {
     const settings = await getPortalSettings();
-    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
+    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
     if (client) {
       const feInstance = await client.getInstance(instanceId);
       if (feInstance) return { instance: feInstance, platform: 'flowengine' as const, client };
@@ -106,7 +106,7 @@ export async function POST(
   if (resolved.platform === 'flowengine') {
     try {
       const settings = await getPortalSettings();
-      const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
+      const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
       if (!client) {
         return NextResponse.json(
           { success: false, error: 'config_error', message: 'FlowEngine API key not configured.' },
@@ -176,7 +176,7 @@ export async function PATCH(
   if (resolved.platform === 'flowengine') {
     try {
       const settings = await getPortalSettings();
-      const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
+      const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
       if (!client) {
         return NextResponse.json(
           { success: false, error: 'config_error', message: 'FlowEngine API key not configured.' },

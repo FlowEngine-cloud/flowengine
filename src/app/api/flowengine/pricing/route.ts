@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ connected: false, error: 'No API key configured — save your key first' });
     }
 
-    const client = createFlowEngineClient(apiKey);
+    const client = createFlowEngineClient(apiKey, settings.flowengine_api_url ?? undefined);
     if (!client) {
       return NextResponse.json({ connected: false, error: 'No API key configured' });
     }
@@ -64,11 +64,12 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => ({}));
     const providedKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : null;
+    const providedUrl = typeof body.apiUrl === 'string' ? body.apiUrl.trim() : null;
 
     let apiKey: string | null = providedKey;
+    const settings = await getPortalSettings();
 
     if (!apiKey) {
-      const settings = await getPortalSettings();
       apiKey = settings.flowengine_api_key;
     }
 
@@ -76,7 +77,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ connected: false, error: 'No API key provided' });
     }
 
-    const client = createFlowEngineClient(apiKey);
+    // Prefer URL from form (pre-save test), fall back to saved URL
+    const apiUrl = providedUrl || settings.flowengine_api_url || undefined;
+    const client = createFlowEngineClient(apiKey, apiUrl);
     if (!client) {
       return NextResponse.json({ connected: false, error: 'Invalid key' });
     }

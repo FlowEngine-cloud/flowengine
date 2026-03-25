@@ -46,7 +46,7 @@ export async function GET(
 
     const { instanceId } = await params;
     const settings = await getPortalSettings();
-    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
+    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
     if (!client) return NextResponse.json({ error: 'FlowEngine API key not configured' }, { status: 400 });
 
     const instance = await client.getInstance(instanceId);
@@ -76,7 +76,7 @@ export async function PATCH(
     }
 
     const settings = await getPortalSettings();
-    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
+    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
     if (!client) return NextResponse.json({ error: 'FlowEngine API key not configured' }, { status: 400 });
 
     const result = await client.renameInstance(instanceId, instance_name.trim().substring(0, 50));
@@ -99,7 +99,7 @@ export async function DELETE(
 
     const { instanceId } = await params;
     const settings = await getPortalSettings();
-    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
+    const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined, settings.flowengine_api_url ?? undefined);
     if (!client) return NextResponse.json({ error: 'FlowEngine API key not configured' }, { status: 400 });
 
     await client.deleteInstance(instanceId);
