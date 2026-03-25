@@ -14,6 +14,7 @@ import { useHostingContext } from '../context';
 import { Server, Loader2, ChevronRight, ExternalLink, Play, Square, RotateCcw, Trash2, Globe, RefreshCw, Terminal, History, Pencil, Check, X, Link2, Users, Plus, Eye, EyeOff, Copy, Database, HardDrive } from 'lucide-react';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
 function ServiceIcon({ serviceType, className = 'w-5 h-5' }: { serviceType?: string | null; className?: string }) {
   if (serviceType === 'openclaw') return <img src="/logos/openclaw.png" className={`${className} object-contain rounded`} alt="OpenClaw" />;
@@ -149,6 +150,166 @@ function LogsSection({ instanceId, logsUrl, token }: { instanceId: string; logsU
   );
 }
 
+// ─── Shared Client Assignment Section ────────────────────────────────────────
+
+type ClientAssignment = { user_id: string; client_email: string; client_name?: string };
+
+function ClientAssignmentSection({ instanceId, access }: { instanceId: string; access: string | undefined }) {
+  const { session } = useAuth();
+  const [clientAssignments, setClientAssignments] = useState<ClientAssignment[]>([]);
+  const [allAgencyClients, setAllAgencyClients] = useState<ClientAssignment[]>([]);
+  const [clientsLoaded, setClientsLoaded] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [assigning, setAssigning] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!session?.access_token || clientsLoaded || access !== 'owner') return;
+    const load = async () => {
+      try {
+        const res = await fetch('/api/client/instances', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const list: any[] = data.instances || [];
+        const seenIds = new Set<string>();
+        const all: ClientAssignment[] = [];
+        for (const ci of list) {
+          if (!ci.user_id || ci.user_id.startsWith('pending:')) continue;
+          if (seenIds.has(ci.user_id)) continue;
+          seenIds.add(ci.user_id);
+          all.push({ user_id: ci.user_id, client_email: ci.client_email || ci.user_id, client_name: ci.client_name });
+        }
+        setAllAgencyClients(all);
+        const assigned = list
+          .filter(ci => ci.instance_id === instanceId && !ci.user_id?.startsWith('pending:') && !ci.client_paid)
+          .map(ci => ({ user_id: ci.user_id, client_email: ci.client_email || ci.user_id, client_name: ci.client_name }));
+        setClientAssignments(assigned);
+      } catch { /* silent */ } finally {
+        setClientsLoaded(true);
+      }
+    };
+    load();
+  }, [session?.access_token, clientsLoaded, instanceId, access]);
+
+  const handleAssign = async () => {
+    if (!session?.access_token || !selectedClientId) return;
+    setAssigning(true);
+    setAssignError(null);
+    try {
+      const res = await fetch('/api/client/instances', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ instance_id: instanceId, client_user_id: selectedClientId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setAssignError(data.error || 'Failed to assign client'); return; }
+      const client = allAgencyClients.find(c => c.user_id === selectedClientId);
+      if (client) setClientAssignments(prev => [...prev, client]);
+      setShowForm(false);
+      setSelectedClientId('');
+    } catch {
+      setAssignError('Failed to assign client');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleRevoke = async (clientUserId: string) => {
+    if (!session?.access_token) return;
+    setRevokingId(clientUserId);
+    try {
+      const res = await fetch('/api/client/instances', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ instance_id: instanceId, user_id: clientUserId }),
+      });
+      if (res.ok) setClientAssignments(prev => prev.filter(c => c.user_id !== clientUserId));
+    } catch { /* silent */ } finally {
+      setRevokingId(null);
+    }
+  };
+
+  if (access !== 'owner') return null;
+
+  const available = allAgencyClients.filter(c => !clientAssignments.some(a => a.user_id === c.user_id));
+
+  return (
+    <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-white">Assigned Clients</p>
+        {clientsLoaded && !showForm && available.length > 0 && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors"
+          >
+            <Plus className="w-3 h-3" /> Assign
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="space-y-3">
+          <SearchableSelect
+            value={selectedClientId}
+            onChange={setSelectedClientId}
+            placeholder="Select a client..."
+            options={[
+              { value: '', label: 'Select a client...' },
+              ...available.map(c => ({ value: c.user_id, label: c.client_name ? `${c.client_name} (${c.client_email})` : c.client_email })),
+            ]}
+          />
+          {assignError && <p className="text-xs text-red-400">{assignError}</p>}
+          <div className="flex gap-2">
+            <button
+              onClick={handleAssign}
+              disabled={!selectedClientId || assigning}
+              className="px-3 py-2 bg-white text-black hover:bg-gray-100 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+            >
+              {assigning ? 'Assigning…' : 'Assign'}
+            </button>
+            <button
+              onClick={() => { setShowForm(false); setSelectedClientId(''); setAssignError(null); }}
+              className="px-3 py-2 border border-gray-700 hover:bg-gray-700 text-white/60 rounded-lg text-sm font-medium transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!clientsLoaded ? (
+        <Loader2 className="w-4 h-4 animate-spin text-white/30" />
+      ) : clientAssignments.length === 0 ? (
+        <p className="text-sm text-white/40">No clients assigned</p>
+      ) : (
+        <div className="space-y-2">
+          {clientAssignments.map(c => (
+            <div key={c.user_id} className="flex items-center gap-3 p-3 bg-gray-900/50 border border-gray-800 rounded-lg">
+              <Users className="w-4 h-4 text-white/30 shrink-0" />
+              <div className="flex-1 min-w-0">
+                {c.client_name && <p className="text-sm font-medium text-white truncate">{c.client_name}</p>}
+                <p className="text-sm text-white/60 truncate">{c.client_email}</p>
+              </div>
+              <button
+                onClick={() => handleRevoke(c.user_id)}
+                disabled={revokingId === c.user_id}
+                className="p-1.5 rounded-lg hover:bg-red-900/30 text-white/20 hover:text-red-400 transition-colors disabled:opacity-50"
+                title="Revoke access"
+              >
+                {revokingId === c.user_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── FlowEngine Instance Detail ──────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string; spin?: boolean; pulse?: boolean }> = {
@@ -196,17 +357,6 @@ function FlowEngineInstanceDetail({ instance, onDeleted, onRenamed }: { instance
   const [backupsLoading, setBackupsLoading] = useState(false);
   const [creatingBackup, setCreatingBackup] = useState(false);
   const [backupsError, setBackupsError] = useState<string | null>(null);
-
-  // Client assignment (owner only)
-  type ClientAssignment = { user_id: string; client_email: string; client_name?: string };
-  const [clientAssignments, setClientAssignments] = useState<ClientAssignment[]>([]);
-  const [allAgencyClients, setAllAgencyClients] = useState<ClientAssignment[]>([]);
-  const [clientsLoaded, setClientsLoaded] = useState(false);
-  const [showAssignClientForm, setShowAssignClientForm] = useState(false);
-  const [selectedClientId, setSelectedClientId] = useState('');
-  const [assigningClient, setAssigningClient] = useState(false);
-  const [assignClientError, setAssignClientError] = useState<string | null>(null);
-  const [revokingClientId, setRevokingClientId] = useState<string | null>(null);
 
   // Read fake action block from localStorage on mount (can't access during SSR)
   useEffect(() => {
@@ -273,37 +423,6 @@ function FlowEngineInstanceDetail({ instance, onDeleted, onRenamed }: { instance
     const interval = setInterval(poll, 5000);
     return () => { mounted = false; clearInterval(interval); };
   }, [session?.access_token, instance.id, fakeStatus, actionLoading]);
-
-  // Load client assignments (owner only)
-  useEffect(() => {
-    if (!session?.access_token || clientsLoaded || instance.access !== 'owner') return;
-    const load = async () => {
-      try {
-        const res = await fetch('/api/client/instances', {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        const instances: any[] = data.instances || [];
-        const seenIds = new Set<string>();
-        const all: { user_id: string; client_email: string; client_name?: string }[] = [];
-        for (const ci of instances) {
-          if (!ci.user_id || ci.user_id.startsWith('pending:')) continue;
-          if (seenIds.has(ci.user_id)) continue;
-          seenIds.add(ci.user_id);
-          all.push({ user_id: ci.user_id, client_email: ci.client_email || ci.user_id, client_name: ci.client_name });
-        }
-        setAllAgencyClients(all);
-        const assigned = instances
-          .filter(ci => ci.instance_id === instance.id && !ci.user_id?.startsWith('pending:') && !ci.client_paid)
-          .map(ci => ({ user_id: ci.user_id, client_email: ci.client_email || ci.user_id, client_name: ci.client_name }));
-        setClientAssignments(assigned);
-      } catch { /* silent */ } finally {
-        setClientsLoaded(true);
-      }
-    };
-    load();
-  }, [session?.access_token, clientsLoaded, instance.id, instance.access]);
 
   const displayStatus = fakeStatus || detail?.status || instance.status;
   const sc = STATUS_CONFIG[displayStatus] ?? { label: displayStatus, cls: 'text-gray-400 bg-gray-800/30 border-gray-700' };
@@ -395,44 +514,6 @@ function FlowEngineInstanceDetail({ instance, onDeleted, onRenamed }: { instance
       setBackupsError('Failed to create backup.');
     } finally {
       setCreatingBackup(false);
-    }
-  };
-
-  const handleAssignClient = async () => {
-    if (!session?.access_token || !selectedClientId) return;
-    setAssigningClient(true);
-    setAssignClientError(null);
-    try {
-      const res = await fetch('/api/client/instances', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ instance_id: instance.id, client_user_id: selectedClientId }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setAssignClientError(data.error || 'Failed to assign client'); return; }
-      const client = allAgencyClients.find(c => c.user_id === selectedClientId);
-      if (client) setClientAssignments(prev => [...prev, client]);
-      setShowAssignClientForm(false);
-      setSelectedClientId('');
-    } catch {
-      setAssignClientError('Failed to assign client');
-    } finally {
-      setAssigningClient(false);
-    }
-  };
-
-  const handleRevokeClient = async (clientUserId: string) => {
-    if (!session?.access_token) return;
-    setRevokingClientId(clientUserId);
-    try {
-      const res = await fetch('/api/client/instances', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ instance_id: instance.id, user_id: clientUserId }),
-      });
-      if (res.ok) setClientAssignments(prev => prev.filter(c => c.user_id !== clientUserId));
-    } catch { /* silent */ } finally {
-      setRevokingClientId(null);
     }
   };
 
@@ -806,80 +887,8 @@ function FlowEngineInstanceDetail({ instance, onDeleted, onRenamed }: { instance
           )}
         </div>
 
-        {/* Assigned Clients — owner only */}
-        {instance.access === 'owner' && (
-          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-white">Assigned Clients</p>
-              {clientsLoaded && !showAssignClientForm && allAgencyClients.filter(c => !clientAssignments.some(a => a.user_id === c.user_id)).length > 0 && (
-                <button
-                  onClick={() => setShowAssignClientForm(true)}
-                  className="flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors"
-                >
-                  <Plus className="w-3 h-3" /> Assign
-                </button>
-              )}
-            </div>
-
-            {showAssignClientForm && (
-              <div className="space-y-3">
-                <SearchableSelect
-                  value={selectedClientId}
-                  onChange={setSelectedClientId}
-                  placeholder="Select a client..."
-                  options={[
-                    { value: '', label: 'Select a client...' },
-                    ...allAgencyClients
-                      .filter(c => !clientAssignments.some(a => a.user_id === c.user_id))
-                      .map(c => ({ value: c.user_id, label: c.client_name ? `${c.client_name} (${c.client_email})` : c.client_email }))
-                  ]}
-                />
-                {assignClientError && <p className="text-xs text-red-400">{assignClientError}</p>}
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleAssignClient}
-                    disabled={!selectedClientId || assigningClient}
-                    className="px-3 py-2 bg-white text-black hover:bg-gray-100 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    {assigningClient ? 'Assigning...' : 'Assign'}
-                  </button>
-                  <button
-                    onClick={() => { setShowAssignClientForm(false); setSelectedClientId(''); setAssignClientError(null); }}
-                    className="px-3 py-2 border border-gray-700 hover:bg-gray-700 text-white/60 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {!clientsLoaded ? (
-              <Loader2 className="w-4 h-4 animate-spin text-white/30" />
-            ) : clientAssignments.length === 0 ? (
-              <p className="text-sm text-white/40">No clients assigned</p>
-            ) : (
-              <div className="space-y-2">
-                {clientAssignments.map(c => (
-                  <div key={c.user_id} className="flex items-center gap-3 p-3 bg-gray-900/50 border border-gray-800 rounded-lg">
-                    <Users className="w-4 h-4 text-white/30 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      {c.client_name && <p className="text-sm font-medium text-white truncate">{c.client_name}</p>}
-                      <p className="text-sm text-white/60 truncate">{c.client_email}</p>
-                    </div>
-                    <button
-                      onClick={() => handleRevokeClient(c.user_id)}
-                      disabled={revokingClientId === c.user_id}
-                      className="p-1.5 rounded-lg hover:bg-red-900/30 text-white/20 hover:text-red-400 transition-colors disabled:opacity-50"
-                      title="Revoke access"
-                    >
-                      {revokingClientId === c.user_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Assigned Clients */}
+        <ClientAssignmentSection instanceId={instance.id} access={instance.access} />
 
         {/* Danger zone */}
         <div className="bg-gray-900/50 border border-red-800 rounded-lg p-5">
@@ -934,85 +943,6 @@ function WebsiteInstanceDetail({ instance, onDeleted }: { instance: PortalInstan
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [nameSaving, setNameSaving] = useState(false);
   const [currentName, setCurrentName] = useState(instance.instance_name);
-
-  // Client assignment (owner only)
-  type ClientAssignment = { user_id: string; client_email: string; client_name?: string };
-  const [clientAssignments, setClientAssignments] = useState<ClientAssignment[]>([]);
-  const [allAgencyClients, setAllAgencyClients] = useState<ClientAssignment[]>([]);
-  const [clientsLoaded, setClientsLoaded] = useState(false);
-  const [showAssignClientForm, setShowAssignClientForm] = useState(false);
-  const [selectedClientId, setSelectedClientId] = useState('');
-  const [assigningClient, setAssigningClient] = useState(false);
-  const [assignClientError, setAssignClientError] = useState<string | null>(null);
-  const [revokingClientId, setRevokingClientId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!session?.access_token || clientsLoaded || instance.access !== 'owner') return;
-    const load = async () => {
-      try {
-        const res = await fetch('/api/client/instances', {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        const instances: any[] = data.instances || [];
-        const seenIds = new Set<string>();
-        const all: ClientAssignment[] = [];
-        for (const ci of instances) {
-          if (!ci.user_id || ci.user_id.startsWith('pending:')) continue;
-          if (seenIds.has(ci.user_id)) continue;
-          seenIds.add(ci.user_id);
-          all.push({ user_id: ci.user_id, client_email: ci.client_email || ci.user_id, client_name: ci.client_name });
-        }
-        setAllAgencyClients(all);
-        const assigned = instances
-          .filter(ci => ci.instance_id === instance.id && !ci.user_id?.startsWith('pending:') && !ci.client_paid)
-          .map(ci => ({ user_id: ci.user_id, client_email: ci.client_email || ci.user_id, client_name: ci.client_name }));
-        setClientAssignments(assigned);
-      } catch { /* silent */ } finally {
-        setClientsLoaded(true);
-      }
-    };
-    load();
-  }, [session?.access_token, clientsLoaded, instance.id, instance.access]);
-
-  const handleAssignClient = async () => {
-    if (!session?.access_token || !selectedClientId) return;
-    setAssigningClient(true);
-    setAssignClientError(null);
-    try {
-      const res = await fetch('/api/client/instances', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ instance_id: instance.id, client_user_id: selectedClientId }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setAssignClientError(data.error || 'Failed to assign client'); return; }
-      const client = allAgencyClients.find(c => c.user_id === selectedClientId);
-      if (client) setClientAssignments(prev => [...prev, client]);
-      setShowAssignClientForm(false);
-      setSelectedClientId('');
-    } catch {
-      setAssignClientError('Failed to assign client');
-    } finally {
-      setAssigningClient(false);
-    }
-  };
-
-  const handleRevokeClient = async (clientUserId: string) => {
-    if (!session?.access_token) return;
-    setRevokingClientId(clientUserId);
-    try {
-      const res = await fetch('/api/client/instances', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ instance_id: instance.id, user_id: clientUserId }),
-      });
-      if (res.ok) setClientAssignments(prev => prev.filter(c => c.user_id !== clientUserId));
-    } catch { /* silent */ } finally {
-      setRevokingClientId(null);
-    }
-  };
 
   // Live status
   const [liveStatus, setLiveStatus] = useState(instance.status);
@@ -1361,80 +1291,8 @@ function WebsiteInstanceDetail({ instance, onDeleted }: { instance: PortalInstan
           </div>
         )}
 
-        {/* Assign to Client — owner only */}
-        {instance.access === 'owner' && (
-          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-white">Assigned Clients</p>
-              {clientsLoaded && !showAssignClientForm && allAgencyClients.filter(c => !clientAssignments.some(a => a.user_id === c.user_id)).length > 0 && (
-                <button
-                  onClick={() => setShowAssignClientForm(true)}
-                  className="flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors"
-                >
-                  <Plus className="w-3 h-3" /> Assign
-                </button>
-              )}
-            </div>
-
-            {showAssignClientForm && (
-              <div className="space-y-3">
-                <SearchableSelect
-                  value={selectedClientId}
-                  onChange={setSelectedClientId}
-                  placeholder="Select a client..."
-                  options={[
-                    { value: '', label: 'Select a client...' },
-                    ...allAgencyClients
-                      .filter(c => !clientAssignments.some(a => a.user_id === c.user_id))
-                      .map(c => ({ value: c.user_id, label: c.client_name ? `${c.client_name} (${c.client_email})` : c.client_email }))
-                  ]}
-                />
-                {assignClientError && <p className="text-xs text-red-400">{assignClientError}</p>}
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleAssignClient}
-                    disabled={!selectedClientId || assigningClient}
-                    className="px-3 py-2 bg-white text-black hover:bg-gray-100 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    {assigningClient ? 'Assigning...' : 'Assign'}
-                  </button>
-                  <button
-                    onClick={() => { setShowAssignClientForm(false); setSelectedClientId(''); setAssignClientError(null); }}
-                    className="px-3 py-2 border border-gray-700 hover:bg-gray-700 text-white/60 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {!clientsLoaded ? (
-              <Loader2 className="w-4 h-4 animate-spin text-white/30" />
-            ) : clientAssignments.length === 0 ? (
-              <p className="text-sm text-white/40">No clients assigned</p>
-            ) : (
-              <div className="space-y-2">
-                {clientAssignments.map(c => (
-                  <div key={c.user_id} className="flex items-center gap-3 p-3 bg-gray-900/50 border border-gray-800 rounded-lg">
-                    <Users className="w-4 h-4 text-white/30 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      {c.client_name && <p className="text-sm font-medium text-white truncate">{c.client_name}</p>}
-                      <p className="text-sm text-white/60 truncate">{c.client_email}</p>
-                    </div>
-                    <button
-                      onClick={() => handleRevokeClient(c.user_id)}
-                      disabled={revokingClientId === c.user_id}
-                      className="p-1.5 rounded-lg hover:bg-red-900/30 text-white/20 hover:text-red-400 transition-colors disabled:opacity-50"
-                      title="Revoke access"
-                    >
-                      {revokingClientId === c.user_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Assigned Clients */}
+        <ClientAssignmentSection instanceId={instance.id} access={instance.access} />
 
         {/* Danger zone */}
         {instance.access === 'owner' && (
@@ -1484,13 +1342,44 @@ function WebsiteInstanceDetail({ instance, onDeleted }: { instance: PortalInstan
 
 function ExternalInstanceDetail({ instance, onDeleted }: { instance: PortalInstance; onDeleted: () => void }) {
   const { session } = useAuth();
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Name
   const [nameSaving, setNameSaving] = useState(false);
   const [currentName, setCurrentName] = useState(instance.instance_name);
 
+  // URL
+  const [currentUrl, setCurrentUrl] = useState(instance.instance_url || '');
+  const [editingUrl, setEditingUrl] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
+  const [urlSaving, setUrlSaving] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
+
+  // Notes
+  const [instanceNotes, setInstanceNotes] = useState<string | null>(null);
+  const [notesLoaded, setNotesLoaded] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState('');
+  const [notesSaving, setNotesSaving] = useState(false);
+
+  // Delete
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const created = instance.created_at ? new Date(instance.created_at).toLocaleDateString() : null;
+
+  // Load notes on mount
+  useEffect(() => {
+    supabase
+      .from('pay_per_instance_deployments')
+      .select('notes')
+      .eq('id', instance.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        setInstanceNotes((data as any)?.notes || null);
+        setNotesLoaded(true);
+      });
+  }, [instance.id]);
 
   const handleRename = async (newName: string) => {
     if (!session?.access_token) return;
@@ -1507,6 +1396,43 @@ function ExternalInstanceDetail({ instance, onDeleted }: { instance: PortalInsta
       }
     } catch {} finally {
       setNameSaving(false);
+    }
+  };
+
+  const handleSaveUrl = async () => {
+    if (!session?.access_token) return;
+    setUrlSaving(true);
+    setUrlError(null);
+    try {
+      const res = await fetch('/api/hosting/connect', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ instanceId: instance.id, instanceUrl: urlInput.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setUrlError(data.error || 'Failed to update URL'); return; }
+      setCurrentUrl(data.instance?.instance_url ?? urlInput.trim());
+      setEditingUrl(false);
+    } catch { setUrlError('Request failed.'); } finally {
+      setUrlSaving(false);
+    }
+  };
+
+  const handleSaveNotes = async () => {
+    if (!session?.access_token) return;
+    setNotesSaving(true);
+    try {
+      const res = await fetch('/api/hosting/connect', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ instanceId: instance.id, notes: notesDraft.trim() }),
+      });
+      if (res.ok) {
+        setInstanceNotes(notesDraft.trim() || null);
+        setEditingNotes(false);
+      }
+    } catch { /* silent */ } finally {
+      setNotesSaving(false);
     }
   };
 
@@ -1534,6 +1460,8 @@ function ExternalInstanceDetail({ instance, onDeleted }: { instance: PortalInsta
     }
   };
 
+  const isOwner = instance.access === 'owner';
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-4">
@@ -1545,14 +1473,17 @@ function ExternalInstanceDetail({ instance, onDeleted }: { instance: PortalInsta
               <Link2 className="w-5 h-5 text-white/60" />
             </div>
             <div className="flex-1 min-w-0">
-              <InlineNameEditor name={currentName} onSave={handleRename} saving={nameSaving} />
+              {isOwner
+                ? <InlineNameEditor name={currentName} onSave={handleRename} saving={nameSaving} />
+                : <p className="text-white font-semibold truncate">{currentName}</p>
+              }
               <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border mt-1 text-gray-400 bg-gray-800/30 border-gray-700">
                 External
               </span>
             </div>
-            {instance.instance_url && (
+            {currentUrl && (
               <a
-                href={instance.instance_url}
+                href={currentUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 px-4 py-2 bg-white text-black hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
@@ -1563,37 +1494,124 @@ function ExternalInstanceDetail({ instance, onDeleted }: { instance: PortalInsta
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {instance.instance_url && (
-              <div className="bg-gray-800/30 rounded-lg p-3 col-span-2 sm:col-span-2">
-                <p className="text-sm text-white/60 mb-1">URL</p>
-                <p className="text-white font-medium text-sm truncate">{instance.instance_url}</p>
-              </div>
-            )}
             {created && (
               <div className="bg-gray-800/30 rounded-lg p-3">
-                <p className="text-sm text-white/60 mb-1">Added</p>
-                <p className="text-white font-medium">{created}</p>
+                <p className="text-xs text-white/40 mb-1">Added</p>
+                <p className="text-white font-medium text-sm">{created}</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Remove */}
-        {instance.access === 'owner' && (
-          <div className="border-t border-gray-800 pt-4">
+        {/* URL — editable for owners */}
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+          <p className="text-xs text-white/40 mb-2">URL</p>
+          {isOwner && editingUrl ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  type="url"
+                  value={urlInput}
+                  onChange={e => setUrlInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveUrl(); if (e.key === 'Escape') { setEditingUrl(false); setUrlError(null); } }}
+                  placeholder="https://your-service.example.com"
+                  className="flex-1 min-w-0 px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-white text-sm font-mono focus:outline-none focus:border-white"
+                />
+                <button onClick={handleSaveUrl} disabled={urlSaving} className="p-1.5 rounded hover:bg-gray-700 text-green-400 hover:text-green-300 transition-colors disabled:opacity-50">
+                  {urlSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                </button>
+                <button onClick={() => { setEditingUrl(false); setUrlError(null); }} className="p-1.5 rounded hover:bg-gray-700 text-white/40 hover:text-white/60 transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {urlError && <p className="text-xs text-red-400">{urlError}</p>}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-white font-mono flex-1 truncate">
+                {currentUrl || <span className="text-white/30">Not set</span>}
+              </p>
+              {isOwner && (
+                <button
+                  onClick={() => { setUrlInput(currentUrl); setEditingUrl(true); }}
+                  className="p-1 rounded hover:bg-gray-700 text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Notes */}
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-white/40">Notes</p>
+            {isOwner && notesLoaded && !editingNotes && (
+              <button
+                onClick={() => { setNotesDraft(instanceNotes || ''); setEditingNotes(true); }}
+                className="p-1 rounded hover:bg-gray-700 text-white/30 hover:text-white/60 transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          {isOwner && editingNotes ? (
+            <div className="space-y-2">
+              <textarea
+                autoFocus
+                value={notesDraft}
+                onChange={e => setNotesDraft(e.target.value)}
+                maxLength={1000}
+                rows={3}
+                placeholder="Add a note about this instance…"
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-white resize-y"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveNotes}
+                  disabled={notesSaving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-black hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  {notesSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  Save
+                </button>
+                <button
+                  onClick={() => setEditingNotes(false)}
+                  className="px-3 py-1.5 border border-gray-700 hover:bg-gray-700 text-white/60 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-white/70 whitespace-pre-wrap">
+              {instanceNotes || <span className="text-white/30">{isOwner ? 'No notes — click the pencil to add one.' : 'No notes.'}</span>}
+            </p>
+          )}
+        </div>
+
+        {/* Assigned Clients */}
+        <ClientAssignmentSection instanceId={instance.id} access={instance.access} />
+
+        {/* Danger Zone */}
+        {isOwner && (
+          <div className="bg-gray-900/50 border border-red-800 rounded-lg p-5">
+            <p className="text-sm font-medium text-white mb-1">Danger Zone</p>
+            <p className="text-sm text-white/60 mb-4">
+              Remove <span className="font-semibold">{currentName}</span> from your portal. This does not affect the actual service.
+            </p>
             {!showDeleteConfirm ? (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-1.5 text-sm text-white/30 hover:text-red-400 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-2 bg-red-900/20 text-red-400 border border-red-800 hover:bg-red-900/30 rounded-lg text-sm font-medium transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                Remove from portal
+                Remove from Portal
               </button>
             ) : (
               <div className="space-y-3">
-                <p className="text-sm text-red-400">
-                  Remove <span className="font-semibold">{currentName}</span> from your portal? This does not affect the actual service.
-                </p>
                 <div className="flex gap-2">
                   <button
                     onClick={handleDelete}
@@ -1776,10 +1794,19 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
     setN8nDeleting(true);
     setN8nDeleteError(null);
     try {
-      const res = await fetch(`/api/flowengine/instances/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
+      let res: Response;
+      if (instance?.is_external) {
+        res = await fetch('/api/hosting/connect', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ instanceId: id }),
+        });
+      } else {
+        res = await fetch(`/api/flowengine/instances/${id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+      }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setN8nDeleteError(data.error || data.message || 'Failed to delete instance');
@@ -1808,9 +1835,9 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
     } catch { return false; }
   })();
 
-  // Show service picker for ALL deployable states (first deploy + redeploy after destroy)
-  // UNLESS there's an active fake status — then show N8nAccountPage for the "starting" UX
-  const isPending = !hasActiveFakeStatus && (instance?.status === 'pending_deploy' || !!instance?.deleted_at || locallyDeleted);
+  // Show service picker only for non-external instances in a deployable state
+  // External instances always go to their manage page, never the service picker
+  const isPending = !hasActiveFakeStatus && !instance?.is_external && (instance?.status === 'pending_deploy' || !!instance?.deleted_at || locallyDeleted);
 
   const handleDeploy = async () => {
     if (!session?.access_token || !selectedService) return;
@@ -1884,7 +1911,16 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
 
   // FlowEngine-managed instance — full management UI
   if (instance?.platform === 'flowengine') {
-    return <FlowEngineInstanceDetail instance={instance} onDeleted={handleFlowEngineDeleted} />;
+    return (
+      <FlowEngineInstanceDetail
+        instance={instance}
+        onDeleted={handleFlowEngineDeleted}
+        onRenamed={async () => {
+          try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
+          await Promise.all([refetchInstances(), refetchLocal()]);
+        }}
+      />
+    );
   }
 
   // Website / Docker instances get their own detail component
@@ -1912,12 +1948,15 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
                 className="flex items-center gap-1.5 px-3 py-2 text-red-400/60 hover:text-red-400 rounded-lg text-sm transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                Delete Instance
+                {instance?.is_external ? 'Remove from Portal' : 'Delete Instance'}
               </button>
             ) : (
               <div className="bg-gray-900/50 border border-red-800 rounded-lg p-4 space-y-3">
                 <p className="text-sm text-red-400">
-                  Permanently delete <span className="font-semibold">{instance.instance_name}</span>? This cannot be undone.
+                  {instance?.is_external
+                    ? <>Remove <span className="font-semibold">{instance.instance_name}</span> from the portal? This does not affect the actual service.</>
+                    : <>Permanently delete <span className="font-semibold">{instance.instance_name}</span>? This cannot be undone.</>
+                  }
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -1926,7 +1965,7 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
                     className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                   >
                     {n8nDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    Yes, Delete
+                    {instance?.is_external ? 'Yes, Remove' : 'Yes, Delete'}
                   </button>
                   <button
                     onClick={() => setShowN8nDeleteConfirm(false)}

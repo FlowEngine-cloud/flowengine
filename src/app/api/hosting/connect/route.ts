@@ -108,6 +108,74 @@ export async function POST(req: NextRequest) {
 }
 
 /**
+ * PATCH /api/hosting/connect
+ * Update an external instance's URL and/or notes.
+ */
+export async function PATCH(req: NextRequest) {
+  try {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await getSupabaseAdmin().auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { instanceId, instanceUrl, notes } = body;
+
+    if (!instanceId || typeof instanceId !== 'string') {
+      return NextResponse.json({ error: 'instanceId is required' }, { status: 400 });
+    }
+
+    const updates: Record<string, unknown> = {};
+
+    if (instanceUrl !== undefined) {
+      const trimmed = typeof instanceUrl === 'string' ? instanceUrl.trim() : '';
+      if (trimmed) {
+        try {
+          const parsed = new URL(trimmed);
+          if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('invalid');
+          updates.instance_url = parsed.origin + parsed.pathname.replace(/\/+$/, '');
+        } catch {
+          return NextResponse.json({ error: 'Invalid instance URL' }, { status: 400 });
+        }
+      } else {
+        updates.instance_url = null;
+      }
+    }
+
+    if (notes !== undefined) {
+      updates.notes = typeof notes === 'string' ? (notes.trim().substring(0, 1000) || null) : null;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'No updates provided' }, { status: 400 });
+    }
+
+    const { data: instance, error } = await getSupabaseAdmin()
+      .from('pay_per_instance_deployments')
+      .update(updates)
+      .eq('id', instanceId)
+      .eq('user_id', user.id)
+      .select('id, instance_name, instance_url')
+      .maybeSingle();
+
+    if (error || !instance) {
+      return NextResponse.json({ error: 'Instance not found or access denied' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, instance });
+  } catch (error) {
+    console.error('[hosting/connect] PATCH error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+/**
  * DELETE /api/hosting/connect
  * Remove an externally-connected instance (soft-delete).
  */

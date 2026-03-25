@@ -173,8 +173,8 @@ export default function HostingPage() {
     </button>
   );
 
-  // External instances (is_external=true) are managed from Client Properties, not shown here
-  const managed = instances.filter(i => !i.is_external);
+  // Hide only soft-deleted external instances; active external ones show in their service type section
+  const managed = instances.filter(i => !(i.is_external && i.deleted_at));
   const notDeployed = managed.filter(i => !i.service_type || i.deleted_at || i.status === 'pending_deploy');
   const n8nInstances = managed.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy');
   const openclawInstances = managed.filter(i => i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy');

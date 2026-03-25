@@ -116,6 +116,11 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [apiKeySaving, setApiKeySaving] = useState(false);
 
+  // URL editing (external instances only)
+  const [editingUrl, setEditingUrl] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
+  const [urlSaving, setUrlSaving] = useState(false);
+
   // Client assignment — one client per instance
   const [clientAssignment, setClientAssignment] = useState<ClientAssignment | null>(null);
   const [allAgencyClients, setAllAgencyClients] = useState<ClientAssignment[]>([]);
@@ -177,6 +182,25 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
   useEffect(() => {
     if (access === 'owner') loadClients();
   }, [access, loadClients]);
+
+  const handleSaveUrl = async () => {
+    if (!session?.access_token || !instance) return;
+    setUrlSaving(true);
+    try {
+      const res = await fetch('/api/hosting/connect', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ instanceId: instance.id, instanceUrl: urlInput.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInstance(prev => prev ? { ...prev, instance_url: data.instance?.instance_url ?? urlInput.trim() } : prev);
+        setEditingUrl(false);
+      }
+    } catch { /* silent */ } finally {
+      setUrlSaving(false);
+    }
+  };
 
   const handleRename = async (newName: string) => {
     if (!session?.access_token || !instance) return;
@@ -370,6 +394,41 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
         </div>
       </div>
 
+      {/* URL editing — external instances only, owner only */}
+      {instance.is_external && isOwner && (
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+          <p className="text-xs text-white/40 mb-2">Instance URL</p>
+          {editingUrl ? (
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                type="url"
+                value={urlInput}
+                onChange={e => setUrlInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSaveUrl(); if (e.key === 'Escape') setEditingUrl(false); }}
+                placeholder="https://your-server.com"
+                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-white text-sm font-mono focus:outline-none focus:border-white"
+              />
+              <button onClick={handleSaveUrl} disabled={urlSaving} className="p-1 rounded hover:bg-gray-700 text-green-400 hover:text-green-300 transition-colors disabled:opacity-50">
+                {urlSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              </button>
+              <button onClick={() => setEditingUrl(false)} className="p-1 rounded hover:bg-gray-700 text-white/40 hover:text-white/60 transition-colors">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-white font-mono flex-1 truncate">
+                {instance.instance_url || <span className="text-white/30">Not set</span>}
+              </p>
+              <button onClick={() => { setUrlInput(instance.instance_url || ''); setEditingUrl(true); }} className="p-1 rounded hover:bg-gray-700 text-white/30 hover:text-white/60 transition-colors">
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Assigned Client — one per instance, owner only */}
       {isOwner && (
         <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-5 space-y-3">
@@ -442,7 +501,7 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
         </div>
       )}
 
-      {!instance.instance_url && (
+      {!instance.instance_url && !instance.is_external && (
         <div className="bg-yellow-900/10 border border-yellow-800/40 rounded-lg p-4">
           <p className="text-sm text-yellow-400 font-medium mb-1">No URL configured</p>
           <p className="text-xs text-white/50">
