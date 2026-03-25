@@ -117,7 +117,11 @@ export function PlatformSettings() {
         (updatedServer as Record<string, unknown>)[field] = config[field];
       }
       setServerConfig(updatedServer);
-      if (section === 'flowengine') setFeConnectionStatus(null);
+      if (section === 'flowengine') {
+        setFeConnectionStatus(null);
+        // Clear cached instance list so FlowEngine instances sync immediately
+        try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
+      }
 
       setMessage({ section, type: 'success', text: 'Settings saved successfully' });
       setTimeout(() => setMessage(null), 3000);

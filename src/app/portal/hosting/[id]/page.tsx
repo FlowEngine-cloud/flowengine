@@ -11,7 +11,7 @@ import { useAuth } from '@/components/AuthContext';
 import { usePortalInstances, PortalInstance } from '@/components/portal/usePortalInstances';
 import N8nAccountPage from '@/app/n8n-account/page';
 import { useHostingContext } from '../context';
-import { Server, Loader2, ChevronRight, ExternalLink, Play, Square, RotateCcw, Trash2, Globe, RefreshCw, Terminal, History, Pencil, Check, X, Link2, Users, Plus } from 'lucide-react';
+import { Server, Loader2, ChevronRight, ExternalLink, Play, Square, RotateCcw, Trash2, Globe, RefreshCw, Terminal, History, Pencil, Check, X, Link2, Users, Plus, Cloud } from 'lucide-react';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
@@ -325,38 +325,185 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string; spin?: boolean
 
 /**
  * FlowEngine Cloud Instance Detail
- * Shows client assignment (portal-specific) + embeds FlowEngine management UI via iframe.
- * Full controls (start/stop/restart, logs, metrics, backups, terminal) are in the FlowEngine portal.
+ * Full management UI using FlowEngine API (start/stop/restart, logs, client assignment).
  */
 function FlowEngineInstanceDetail(props: { instance: PortalInstance; onDeleted: () => void; onRenamed?: (newName: string) => void }) {
-  const { instance } = props;
+  const { instance, onRenamed } = props;
+  const { session } = useAuth();
   const feUrl = `https://flowengine.cloud/portal/hosting/${instance.id}`;
 
+  const [liveStatus, setLiveStatus] = useState(instance.status);
+  const [actionLoading, setActionLoading] = useState<'start' | 'stop' | 'restart' | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [nameSaving, setNameSaving] = useState(false);
+  const [currentName, setCurrentName] = useState(instance.instance_name);
+
+  // Poll live status every 15s
+  useEffect(() => {
+    if (!session?.access_token) return;
+    let mounted = true;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/flowengine/instances/${instance.id}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (res.ok && mounted) {
+          const data = await res.json();
+          if (data.instance?.status) setLiveStatus(data.instance.status);
+        }
+      } catch {}
+    };
+    poll();
+    const iv = setInterval(poll, 15_000);
+    return () => { mounted = false; clearInterval(iv); };
+  }, [session?.access_token, instance.id]);
+
+  const handleManage = async (action: 'start' | 'stop' | 'restart') => {
+    if (!session?.access_token) return;
+    setActionLoading(action);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/flowengine/instances/${instance.id}/manage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setActionError(data.message || 'Action failed'); return; }
+      setLiveStatus(action === 'stop' ? 'stopped' : 'starting');
+    } catch {
+      setActionError('Request failed.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRename = async (newName: string) => {
+    if (!session?.access_token) return;
+    setNameSaving(true);
+    try {
+      const res = await fetch(`/api/flowengine/instances/${instance.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ instance_name: newName }),
+      });
+      if (res.ok) {
+        setCurrentName(newName);
+        try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
+        onRenamed?.(newName);
+      }
+    } catch {} finally {
+      setNameSaving(false);
+    }
+  };
+
+  const sc = STATUS_CONFIG[liveStatus] ?? { label: liveStatus, cls: 'text-gray-400 bg-gray-800/30 border-gray-700' };
+  const isRunning = liveStatus === 'running' || liveStatus === 'active';
+  const isStopped = ['stopped', 'error', 'failed', 'exited'].includes(liveStatus);
+  const isTransitioning = ['provisioning', 'starting', 'stopping', 'restarting'].includes(liveStatus);
+  const created = instance.created_at ? new Date(instance.created_at).toLocaleDateString() : null;
+
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Hint bar + open-in-browser button */}
-      <div className="flex-shrink-0 px-6 py-3 border-b border-gray-800 flex items-center justify-between gap-3">
-        <p className="text-xs text-white/40 truncate">
-          Managed via FlowEngine Cloud — log in to flowengine.cloud for full controls
-        </p>
-        <a
-          href={feUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white/60 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg transition-colors flex-shrink-0"
-        >
-          Open in FlowEngine <ExternalLink className="w-3.5 h-3.5" />
-        </a>
+    <div className="flex-1 overflow-y-auto">
+      <div className="max-w-2xl mx-auto px-4 py-8 space-y-4">
+
+        {/* Header card */}
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-5">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-10 h-10 bg-gray-800/30 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Cloud className="w-5 h-5 text-white/60" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <InlineNameEditor name={currentName} onSave={handleRename} saving={nameSaving} />
+              <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border mt-1 ${sc.cls}`}>
+                {sc.spin && <Loader2 className="w-3 h-3 animate-spin" />}
+                {!sc.spin && sc.pulse && <span className="w-1.5 h-1.5 bg-current rounded-full animate-pulse" />}
+                {sc.label}
+              </span>
+            </div>
+            {instance.instance_url && (
+              <a
+                href={instance.instance_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-4 py-2 bg-white text-black hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
+              >
+                Open <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {instance.storage_limit_gb > 0 && (
+              <div className="bg-gray-800/30 rounded-lg p-3">
+                <p className="text-sm text-white/60 mb-1">Storage</p>
+                <p className="text-white font-medium">{instance.storage_limit_gb} GB</p>
+              </div>
+            )}
+            {created && (
+              <div className="bg-gray-800/30 rounded-lg p-3">
+                <p className="text-sm text-white/60 mb-1">Created</p>
+                <p className="text-white font-medium">{created}</p>
+              </div>
+            )}
+            <div className="bg-gray-800/30 rounded-lg p-3">
+              <p className="text-sm text-white/60 mb-1">Platform</p>
+              <p className="text-white font-medium">FlowEngine Cloud</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-5">
+          <p className="text-sm font-medium text-white mb-4">Controls</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => handleManage('start')}
+              disabled={!!actionLoading || isTransitioning || isRunning}
+              className="flex items-center gap-1.5 px-3 py-2 bg-green-900/20 text-green-400 border border-green-800 hover:bg-green-900/30 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {actionLoading === 'start' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+              Start
+            </button>
+            <button
+              onClick={() => handleManage('stop')}
+              disabled={!!actionLoading || isTransitioning || isStopped}
+              className="flex items-center gap-1.5 px-3 py-2 bg-red-900/20 text-red-400 border border-red-800 hover:bg-red-900/30 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {actionLoading === 'stop' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
+              Stop
+            </button>
+            <button
+              onClick={() => handleManage('restart')}
+              disabled={!!actionLoading || isTransitioning || isStopped}
+              className="flex items-center gap-1.5 px-3 py-2 bg-yellow-900/20 text-yellow-400 border border-yellow-800 hover:bg-yellow-900/30 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {actionLoading === 'restart' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+              Restart
+            </button>
+            <a
+              href={feUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-2 bg-gray-800/30 text-white/60 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg text-sm font-medium transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Open in FlowEngine
+            </a>
+          </div>
+          {actionError && <p className="text-sm text-red-400 mt-3">{actionError}</p>}
+        </div>
+
+        {/* Logs */}
+        <LogsSection
+          instanceId={instance.id}
+          logsUrl={`/api/flowengine/instances/${instance.id}/logs`}
+          token={session?.access_token || ''}
+        />
+
+        {/* Client assignment */}
+        <ClientAssignmentSection instanceId={instance.id} access={instance.access} />
+
       </div>
-      {/* Portal-specific: client assignment */}
-      <ClientAssignmentSection instanceId={instance.id} access={instance.access} />
-      {/* FlowEngine management UI embedded */}
-      <iframe
-        src={feUrl}
-        className="flex-1 w-full border-0 bg-black"
-        title={instance.instance_name}
-        allow="clipboard-write"
-      />
     </div>
   );
 }
@@ -1356,8 +1503,9 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
     return <WebsiteInstanceDetail instance={instance} onDeleted={handleInstanceDeleted} />;
   }
 
-  // External "other" instances — simple name editor + optional URL + remove
-  if (!isPending && instance?.service_type === 'other') {
+  // External "other" instances, or any externally-connected instance (n8n/openclaw via "Connect")
+  // N8nAccountPage only handles portal-hosted instances; external ones would spin forever
+  if (!isPending && (instance?.service_type === 'other' || instance?.is_external)) {
     return <ExternalInstanceDetail instance={instance} onDeleted={handleInstanceDeleted} />;
   }
 
