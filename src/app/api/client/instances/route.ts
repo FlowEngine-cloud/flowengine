@@ -282,16 +282,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Instance not found or access denied' }, { status: 403 });
     }
 
-    // Check if already assigned
-    const { data: existing } = await supabaseAdmin
+    // Enforce one-client-per-instance rule
+    const { data: existingAssignment } = await supabaseAdmin
       .from('client_instances')
-      .select('id')
+      .select('id, user_id')
       .eq('instance_id', instance_id)
-      .eq('user_id', client_user_id)
       .maybeSingle();
 
-    if (existing) {
-      return NextResponse.json({ error: 'Client already assigned to this instance' }, { status: 400 });
+    if (existingAssignment) {
+      if (existingAssignment.user_id === client_user_id) {
+        return NextResponse.json({ error: 'Client already assigned to this instance' }, { status: 400 });
+      }
+      return NextResponse.json({ error: 'Instance already has a client assigned. Revoke access first.' }, { status: 400 });
     }
 
     // Create the assignment directly

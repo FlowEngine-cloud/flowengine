@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { resolveEffectiveUserId } from '@/lib/teamAccess';
+import { isValidUUID } from '@/lib/validation';
 
 /**
  * POST /api/instances/link-external
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     const ownerId = await resolveEffectiveUserId(supabaseAdmin, user.id);
 
     const body = await req.json();
-    const { name, serviceType, instanceUrl, apiKey, clientUserId, clientAccess } = body;
+    const { name, serviceType, instanceUrl, apiKey, clientUserId } = body;
 
     if (!name || typeof name !== 'string' || !name.trim()) {
       return NextResponse.json({ error: 'name is required' }, { status: 400 });
@@ -45,8 +46,8 @@ export async function POST(req: NextRequest) {
     if (serviceType === 'n8n' && (!apiKey || typeof apiKey !== 'string' || !apiKey.trim())) {
       return NextResponse.json({ error: 'apiKey is required for n8n' }, { status: 400 });
     }
-    if (!clientUserId || typeof clientUserId !== 'string') {
-      return NextResponse.json({ error: 'clientUserId is required' }, { status: 400 });
+    if (!clientUserId || typeof clientUserId !== 'string' || !isValidUUID(clientUserId)) {
+      return NextResponse.json({ error: 'clientUserId must be a valid user ID. Client must accept their invite before external instances can be linked.' }, { status: 400 });
     }
 
     // Normalize URL if provided
@@ -94,12 +95,9 @@ export async function POST(req: NextRequest) {
 
     if (assignError) {
       console.error('[link-external] Assign error:', assignError);
-      // Instance was created — return partial success with a warning
-      return NextResponse.json({
-        success: true,
-        warning: 'Instance linked but could not be assigned to client.',
-        instance: { id: instance.id, name: instance.instance_name, url: instance.instance_url },
-      });
+      // Clean up the orphaned instance so it doesn't litter the DB
+      await supabaseAdmin.from('pay_per_instance_deployments').delete().eq('id', instance.id);
+      return NextResponse.json({ error: `Failed to assign instance to client: ${assignError.message}` }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, instance });

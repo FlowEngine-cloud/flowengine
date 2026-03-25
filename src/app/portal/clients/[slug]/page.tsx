@@ -739,6 +739,10 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
 
   const handleLinkExternal = async () => {
     if (!session?.access_token) return;
+    if (isPendingClient) {
+      setExternalError('Client must accept their invite before external instances can be linked.');
+      return;
+    }
     const { serviceType, name, instanceUrl, apiKey } = externalForm;
     if (!name.trim()) { setExternalError('Name is required.'); return; }
     if (serviceType !== 'other' && !instanceUrl.trim()) { setExternalError('URL is required.'); return; }
@@ -759,7 +763,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
         }),
       });
       const data = await res.json();
-      if (!res.ok) {
+      if (!res.ok || !data.success) {
         setExternalError(data.error || 'Failed to link instance.');
         return;
       }
