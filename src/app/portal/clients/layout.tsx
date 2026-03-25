@@ -80,7 +80,6 @@ export default function ClientsLayout({ children }: { children: React.ReactNode 
   // Live hosting status (instanceId → deployment status)
   const [liveStatus, setLiveStatus] = useState<Record<string, string>>({});
   const [statusLoading, setStatusLoading] = useState(true);
-  const statusFetchedRef = useRef(false);
 
   // Client search dropdown state
   const [clientSearch, setClientSearch] = useState('');
@@ -159,14 +158,13 @@ export default function ClientsLayout({ children }: { children: React.ReactNode 
     }
   }, [authLoading, teamLoading, session, fetchClients, fetchAgencyInstances, fetchAgencyServices]);
 
-  // Fetch live hosting status for all real instances (like hosting layout does)
+  // Poll live hosting status for all real instances — runs immediately then every 30 s
   useEffect(() => {
-    if (loading || rawInstances.length === 0 || !session?.access_token || statusFetchedRef.current) return;
-    statusFetchedRef.current = true;
+    if (loading || rawInstances.length === 0 || !session?.access_token) return;
 
     const token = session.access_token;
     const realInsts = rawInstances.filter(i =>
-      !i.instance_id.startsWith('invite:') && !i.is_external
+      !i.instance_id.startsWith('invite:') && !i.is_external && i.service_type !== 'other'
     );
 
     if (realInsts.length === 0) {
@@ -174,25 +172,37 @@ export default function ClientsLayout({ children }: { children: React.ReactNode 
       return;
     }
 
-    Promise.allSettled(
-      realInsts.map(async (inst) => {
-        const res = await fetch(`/api/n8n/status?instanceId=${inst.instance_id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return { id: inst.instance_id, status: inst.status };
-        const data = await res.json();
-        return { id: inst.instance_id, status: data.status || inst.status };
-      })
-    ).then((results) => {
-      const map: Record<string, string> = {};
-      for (const r of results) {
-        if (r.status === 'fulfilled') {
-          map[r.value.id] = r.value.status;
+    const doFetch = () => {
+      Promise.allSettled(
+        realInsts.map(async (inst) => {
+          const isOpenClaw = inst.service_type === 'openclaw';
+          const isDocker = inst.service_type === 'website';
+          const url = isOpenClaw
+            ? `/api/openclaw/${inst.instance_id}/status`
+            : isDocker
+              ? `/api/docker/status?instanceId=${inst.instance_id}`
+              : `/api/n8n/status?instanceId=${inst.instance_id}`;
+          const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+          if (!res.ok) return { id: inst.instance_id, status: inst.status };
+          const data = await res.json();
+          const status = (isOpenClaw || isDocker)
+            ? (data.containerStatus || data.instance?.status || inst.status)
+            : (data.status || inst.status);
+          return { id: inst.instance_id, status };
+        })
+      ).then((results) => {
+        const map: Record<string, string> = {};
+        for (const r of results) {
+          if (r.status === 'fulfilled') map[r.value.id] = r.value.status;
         }
-      }
-      setLiveStatus(map);
-      setStatusLoading(false);
-    });
+        setLiveStatus(prev => ({ ...prev, ...map }));
+        setStatusLoading(false);
+      });
+    };
+
+    doFetch();
+    const intervalId = setInterval(doFetch, 30_000);
+    return () => clearInterval(intervalId);
   }, [loading, rawInstances, session?.access_token]);
 
   // Route guard: clients cannot access client management

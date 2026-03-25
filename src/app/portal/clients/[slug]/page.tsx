@@ -1561,8 +1561,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ slug: s
                             className="flex-1 px-4 py-4 text-left hover:bg-gray-900/50 transition-colors cursor-pointer min-w-0"
                           >
                             <div className="flex items-center gap-2">
-                              {/* Live status dot */}
-                              {(() => {
+                              {/* Live status dot — not shown for external instances */}
+                              {!inst.is_external && (() => {
                                 const s = liveStatus[inst.instance_id] || inst.status;
                                 const isActive = ['active', 'running', 'healthy'].includes(s);
                                 const isConnecting = ['deploying', 'provisioning', 'starting', 'restarting', 'updating'].includes(s);

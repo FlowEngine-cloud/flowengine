@@ -101,7 +101,7 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
   const iconStyle = instance.service_type === 'openclaw'
     ? undefined
     : { filter: 'brightness(0) invert(1) opacity(0.7)' } as React.CSSProperties;
-  const isExternal = !instance.instance_url?.includes(window?.location?.hostname ?? 'localhost');
+  const isExternal = !!instance.is_external;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-4">

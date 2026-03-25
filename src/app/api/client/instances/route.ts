@@ -73,12 +73,19 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Get all accepted invites for linking (agency-invited clients + name-only clients)
-    const { data: invites } = await supabaseAdmin
-      .from('client_invites')
-      .select('id, email, name, accepted_by')
-      .eq('invited_by', effectiveUserId)
-      .eq('status', 'accepted');
+    // Get all invites: accepted (for linking) + pending (to show in client list)
+    const [{ data: invites }, { data: pendingInvites }] = await Promise.all([
+      supabaseAdmin
+        .from('client_invites')
+        .select('id, email, name, accepted_by')
+        .eq('invited_by', effectiveUserId)
+        .eq('status', 'accepted'),
+      supabaseAdmin
+        .from('client_invites')
+        .select('id, email, name')
+        .eq('invited_by', effectiveUserId)
+        .eq('status', 'pending'),
+    ]);
 
     // Define types for the data structures
     type InviteRecord = {
@@ -138,6 +145,7 @@ export async function GET(req: NextRequest) {
           client_paid: false,
           is_external: ci.instance?.is_external || false,
           service_type: ci.instance?.service_type || null,
+          invite_status: 'accepted',
         };
       });
 
@@ -156,6 +164,7 @@ export async function GET(req: NextRequest) {
       client_paid: true,
       is_external: inst.is_external || false,
       service_type: (inst as any).service_type || null,
+      invite_status: 'accepted',
     }));
 
     // Merge both sources
@@ -189,9 +198,34 @@ export async function GET(req: NextRequest) {
         client_name: inv.name || undefined,
         client_paid: false,
         is_external: false,
+        invite_status: 'accepted',
       }));
 
-    return NextResponse.json({ instances: [...instances, ...inviteOnlyClients] });
+    // Include pending invites (email-invited clients who haven't accepted yet)
+    const pendingClients = (pendingInvites || []).map((inv: { id: string; email: string; name: string | null }) => ({
+      instance_id: `invite:${inv.id}`,
+      user_id: `pending:${inv.id}`,
+      invite_id: inv.id,
+      instance_name: '',
+      instance_url: '',
+      status: 'none',
+      storage_limit_gb: 0,
+      created_at: '',
+      client_email: inv.email,
+      client_name: inv.name || undefined,
+      client_paid: false,
+      is_external: false,
+      invite_status: 'pending',
+    }));
+
+    // Exclude pending clients whose email already appears as accepted
+    const acceptedEmails = new Set([
+      ...(invites || []).map((inv: InviteRecord) => inv.email),
+      ...instances.map(i => i.client_email).filter(Boolean),
+    ]);
+    const filteredPending = pendingClients.filter(p => !acceptedEmails.has(p.client_email));
+
+    return NextResponse.json({ instances: [...instances, ...inviteOnlyClients, ...filteredPending] });
   } catch (error) {
     console.error('Client instances error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

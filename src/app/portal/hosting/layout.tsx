@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthContext';
 import { usePortalRoleContext } from '@/app/portal/context';
@@ -44,7 +44,6 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
   // Real-time status map (instanceId -> live status)
   const [liveStatus, setLiveStatus] = useState<Record<string, string>>({});
   const [statusLoading, setStatusLoading] = useState(true);
-  const fetchedRef = useRef(false);
 
   // Fetch client→instance mapping for filter dropdown
   useEffect(() => {
@@ -66,10 +65,9 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
       .catch(() => {});
   }, [session?.access_token]);
 
-  // Fetch live statuses once instances are loaded
+  // Poll live statuses — runs immediately then every 30 s
   useEffect(() => {
-    if (loading || instances.length === 0 || !session?.access_token || fetchedRef.current) return;
-    fetchedRef.current = true;
+    if (loading || instances.length === 0 || !session?.access_token) return;
 
     const token = session.access_token;
     // Skip FlowEngine instances (they poll their own status) and 'other' type (no status endpoint)
@@ -80,35 +78,41 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
       return;
     }
 
-    Promise.allSettled(
-      activeInstances.map(async (inst) => {
-        const isOpenClaw = inst.service_type === 'openclaw';
-        const isDocker = inst.service_type === 'website';
-        const url = isOpenClaw
-          ? `/api/openclaw/${inst.id}/status`
-          : isDocker
-            ? `/api/docker/status?instanceId=${inst.id}`
-            : `/api/n8n/status?instanceId=${inst.id}`;
-        const res = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return { id: inst.id, status: inst.status };
-        const data = await res.json();
-        const status = (isOpenClaw || isDocker)
-          ? (data.containerStatus || data.instance?.status || inst.status)
-          : (data.status || inst.status);
-        return { id: inst.id, status };
-      })
-    ).then((results) => {
-      const map: Record<string, string> = {};
-      for (const r of results) {
-        if (r.status === 'fulfilled') {
-          map[r.value.id] = r.value.status;
+    const doFetch = () => {
+      Promise.allSettled(
+        activeInstances.map(async (inst) => {
+          const isOpenClaw = inst.service_type === 'openclaw';
+          const isDocker = inst.service_type === 'website';
+          const url = isOpenClaw
+            ? `/api/openclaw/${inst.id}/status`
+            : isDocker
+              ? `/api/docker/status?instanceId=${inst.id}`
+              : `/api/n8n/status?instanceId=${inst.id}`;
+          const res = await fetch(url, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) return { id: inst.id, status: inst.status };
+          const data = await res.json();
+          const status = (isOpenClaw || isDocker)
+            ? (data.containerStatus || data.instance?.status || inst.status)
+            : (data.status || inst.status);
+          return { id: inst.id, status };
+        })
+      ).then((results) => {
+        const map: Record<string, string> = {};
+        for (const r of results) {
+          if (r.status === 'fulfilled') {
+            map[r.value.id] = r.value.status;
+          }
         }
-      }
-      setLiveStatus(map);
-      setStatusLoading(false);
-    });
+        setLiveStatus(prev => ({ ...prev, ...map }));
+        setStatusLoading(false);
+      });
+    };
+
+    doFetch();
+    const intervalId = setInterval(doFetch, 30_000);
+    return () => clearInterval(intervalId);
   }, [loading, instances, session?.access_token]);
 
   const isClient = role === 'client';

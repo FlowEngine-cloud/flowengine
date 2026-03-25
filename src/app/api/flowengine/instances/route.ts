@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPortalSettings } from '@/lib/portalSettings';
 import { createFlowEngineClient, FlowEngineApiError } from '@/lib/flowengine';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { verifyFlowEngineAccess } from '@/lib/flowengineAccess';
 
 async function authenticate(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -58,6 +59,8 @@ export async function POST(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const { authorized } = await verifyFlowEngineAccess(supabaseAdmin, user.id);
+    if (!authorized) return NextResponse.json({ error: 'Access denied' }, { status: 403 });
 
     const settings = await getPortalSettings();
     const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
@@ -96,6 +99,8 @@ export async function GET(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const { authorized } = await verifyFlowEngineAccess(supabaseAdmin, user.id);
+    if (!authorized) return NextResponse.json({ error: 'Access denied' }, { status: 403 });
 
     const settings = await getPortalSettings();
     const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);

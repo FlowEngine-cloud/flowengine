@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPortalSettings } from '@/lib/portalSettings';
 import { createFlowEngineClient, FlowEngineApiError } from '@/lib/flowengine';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { verifyFlowEngineAccess } from '@/lib/flowengineAccess';
 
 export async function GET(
   req: NextRequest,
@@ -24,6 +25,8 @@ export async function GET(
     if (authError || !user) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
+    const { authorized } = await verifyFlowEngineAccess(supabaseAdmin, user.id);
+    if (!authorized) return new NextResponse('Access denied', { status: 403 });
 
     const { instanceId } = await params;
     const { searchParams } = new URL(req.url);

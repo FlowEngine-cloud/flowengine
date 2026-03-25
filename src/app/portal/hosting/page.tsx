@@ -93,6 +93,14 @@ export default function HostingPage() {
         </span>
       );
     }
+    // External instances have no live status endpoint — show neutral badge
+    if (inst.is_external || inst.service_type === 'other') {
+      return (
+        <span className="px-2 py-0.5 text-xs rounded-full bg-gray-800/30 text-white/40 border border-gray-700 inline-flex items-center gap-1.5 shrink-0">
+          External
+        </span>
+      );
+    }
     const s = liveStatus[inst.id] || inst.status;
     if (s === 'running' || s === 'active') return (
       <span className="px-2 py-0.5 text-xs rounded-full bg-green-500/10 text-green-400 border border-green-500/20 inline-flex items-center gap-1.5 shrink-0">
