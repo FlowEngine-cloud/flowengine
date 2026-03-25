@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { isValidUUID, isValidWebhookUrl, sanitizeString, validateAndSanitizeCSS } from '@/lib/validation';
+import { resolveEffectiveUserId } from '@/lib/teamAccess';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 
@@ -27,20 +28,22 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid template ID' }, { status: 400 });
     }
 
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
+
     // Get user's owned instances, agency-managed instances, AND client-access instances
     const [{ data: userInstances }, { data: agencyInstances }, { data: clientAccessInstances }] = await Promise.all([
       supabaseAdmin
         .from('pay_per_instance_deployments')
         .select('id')
-        .eq('user_id', user.id),
+        .eq('user_id', effectiveUserId),
       supabaseAdmin
         .from('client_instances')
         .select('instance_id')
-        .eq('invited_by', user.id),
+        .eq('invited_by', effectiveUserId),
       supabaseAdmin
         .from('client_instances')
         .select('instance_id')
-        .eq('user_id', user.id),
+        .eq('user_id', effectiveUserId),
     ]);
 
     const userInstanceIds = userInstances?.map(i => i.id) || [];
@@ -68,7 +71,7 @@ export async function GET(
     }
 
     // Verify access - widget must be owned by user directly OR via instance (owned or agency)
-    const ownsDirectly = widget.user_id === user.id;
+    const ownsDirectly = widget.user_id === effectiveUserId;
     const ownsViaInstance = widget.instance_id && allAccessibleInstanceIds.includes(widget.instance_id);
 
     if (!ownsDirectly && !ownsViaInstance) {
@@ -105,6 +108,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Invalid template ID' }, { status: 400 });
     }
 
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
+
     const body = await request.json();
     const { name, widget_type, form_fields, chatbot_config, webhook_url, instance_id, styles, is_active } = body;
 
@@ -127,7 +132,7 @@ export async function PUT(
 
     if (form_fields !== undefined) {
       // If changing to/from form type, validate fields
-      const effectiveType = widget_type ?? (await getTemplateType(supabaseAdmin, id, user.id));
+      const effectiveType = widget_type ?? (await getTemplateType(supabaseAdmin, id));
 
       if (effectiveType === 'form') {
         if (!Array.isArray(form_fields) || form_fields.length === 0) {
@@ -156,7 +161,7 @@ export async function PUT(
 
     if (chatbot_config !== undefined) {
       // If changing to/from chatbot type, save config
-      const effectiveType = widget_type ?? (await getTemplateType(supabaseAdmin, id, user.id));
+      const effectiveType = widget_type ?? (await getTemplateType(supabaseAdmin, id));
 
       if (effectiveType === 'chatbot') {
         // SECURITY: Sanitize custom CSS
@@ -198,8 +203,8 @@ export async function PUT(
             .maybeSingle(),
         ]);
 
-        const isInstanceOwner = instance?.user_id === user.id;
-        const isAgency = clientInstance?.invited_by === user.id;
+        const isInstanceOwner = instance?.user_id === effectiveUserId;
+        const isAgency = clientInstance?.invited_by === effectiveUserId;
 
         if (!instance || (!isInstanceOwner && !isAgency)) {
           return NextResponse.json({ error: 'Instance not found' }, { status: 404 });
@@ -274,15 +279,15 @@ export async function PUT(
       supabaseAdmin
         .from('pay_per_instance_deployments')
         .select('id')
-        .eq('user_id', user.id),
+        .eq('user_id', effectiveUserId),
       supabaseAdmin
         .from('client_instances')
         .select('instance_id')
-        .eq('invited_by', user.id),
+        .eq('invited_by', effectiveUserId),
       supabaseAdmin
         .from('client_instances')
         .select('instance_id')
-        .eq('user_id', user.id),
+        .eq('user_id', effectiveUserId),
     ]);
 
     const userInstanceIds = userInstances?.map(i => i.id) || [];
@@ -302,7 +307,7 @@ export async function PUT(
     }
 
     // Verify access - widget must be owned by user directly OR via instance (owned or agency)
-    const ownsDirectly = existingWidget.user_id === user.id;
+    const ownsDirectly = existingWidget.user_id === effectiveUserId;
     const ownsViaInstance = existingWidget.instance_id && allAccessibleInstanceIds.includes(existingWidget.instance_id);
 
     if (!ownsDirectly && !ownsViaInstance) {
@@ -353,7 +358,7 @@ export async function PUT(
           const { data: newCategory } = await supabaseAdmin
             .from('widget_categories')
             .insert({
-              user_id: user.id,
+              user_id: effectiveUserId,
               name: instanceData?.instance_name || 'Client',
               description: 'Auto-created category for client components',
               color: '#6366f1',
@@ -421,20 +426,22 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid template ID' }, { status: 400 });
     }
 
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
+
     // Get user's owned instances, agency-managed instances, AND client-access instances
     const [{ data: userInstances }, { data: agencyInstances }, { data: clientAccessInstances }] = await Promise.all([
       supabaseAdmin
         .from('pay_per_instance_deployments')
         .select('id')
-        .eq('user_id', user.id),
+        .eq('user_id', effectiveUserId),
       supabaseAdmin
         .from('client_instances')
         .select('instance_id')
-        .eq('invited_by', user.id),
+        .eq('invited_by', effectiveUserId),
       supabaseAdmin
         .from('client_instances')
         .select('instance_id')
-        .eq('user_id', user.id),
+        .eq('user_id', effectiveUserId),
     ]);
 
     const userInstanceIds = userInstances?.map(i => i.id) || [];
@@ -454,7 +461,7 @@ export async function DELETE(
     }
 
     // Verify access - widget must be owned by user directly OR via instance (owned or agency)
-    const ownsDirectly = existingWidget.user_id === user.id;
+    const ownsDirectly = existingWidget.user_id === effectiveUserId;
     const ownsViaInstance = existingWidget.instance_id && allAccessibleInstanceIds.includes(existingWidget.instance_id);
 
     if (!ownsDirectly && !ownsViaInstance) {
@@ -479,7 +486,7 @@ export async function DELETE(
 }
 
 // Helper function to get template type
-async function getTemplateType(client: SupabaseClient, id: string, _userId: string): Promise<string | null> {
+async function getTemplateType(client: SupabaseClient, id: string): Promise<string | null> {
   const { data } = await client
     .from('client_widgets')
     .select('widget_type')

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isValidUUID, isValidWebhookUrl } from '@/lib/validation';
+import { resolveEffectiveUserId } from '@/lib/teamAccess';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 
@@ -18,6 +19,8 @@ export async function POST(request: NextRequest) {
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
 
     // Parse request body
     const body = await request.json();
@@ -73,14 +76,14 @@ export async function POST(request: NextRequest) {
 
         if (instanceData) {
           // Check if user is owner
-          const isOwner = instanceData.user_id === user.id;
+          const isOwner = instanceData.user_id === effectiveUserId;
 
           // Check if user is client or agency of this instance
           const { data: clientInstance } = await supabaseAdmin
             .from('client_instances')
             .select('user_id, invited_by')
             .eq('instance_id', instanceData.id)
-            .or(`user_id.eq.${user.id},invited_by.eq.${user.id}`)
+            .or(`user_id.eq.${effectiveUserId},invited_by.eq.${effectiveUserId}`)
             .maybeSingle();
 
           const hasAccess = isOwner || !!clientInstance;
@@ -98,7 +101,7 @@ export async function POST(request: NextRequest) {
       const { data: instances } = await supabaseAdmin
         .from('pay_per_instance_deployments')
         .select('id, instance_url')
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveUserId)
         .limit(1);
 
       instanceId = instances?.[0]?.id;
@@ -134,7 +137,7 @@ export async function POST(request: NextRequest) {
         chatbot_config: widget_type === 'chatbot' ? finalChatbotConfig : null,
         form_fields: widget_type === 'form' ? form_fields : null,
         webhook_url: webhook_url || '',
-        user_id: user.id,
+        user_id: effectiveUserId,
         instance_id: instanceId,
         is_active: true,
         created_by: user.id,
@@ -193,7 +196,7 @@ export async function POST(request: NextRequest) {
           const { data: newCategory } = await supabaseAdmin
             .from('widget_categories')
             .insert({
-              user_id: user.id,
+              user_id: effectiveUserId,
               name: instanceData?.instance_name || 'Client',
               description: 'Auto-created category for client components',
               color: '#6366f1',
@@ -227,7 +230,7 @@ export async function POST(request: NextRequest) {
       await supabaseAdmin
         .from('client_widgets')
         .delete()
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveUserId)
         .eq('is_active', false)
         .or('name.eq.__WORKFLOW_DRAFT__,name.like.__DRAFT__%');
     } catch (err) {

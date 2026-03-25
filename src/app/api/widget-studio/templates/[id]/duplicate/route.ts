@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isValidUUID } from '@/lib/validation';
+import { resolveEffectiveUserId } from '@/lib/teamAccess';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 
@@ -26,12 +27,14 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid template ID' }, { status: 400 });
     }
 
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
+
     // Fetch the original template
     const { data: original, error: fetchError } = await supabaseAdmin
       .from('client_widgets')
       .select('*')
       .eq('id', id)
-      .eq('user_id', user.id)
+      .eq('user_id', effectiveUserId)
       .maybeSingle();
 
     if (fetchError || !original) {
@@ -42,7 +45,7 @@ export async function POST(
     const { data: duplicate, error: createError } = await supabaseAdmin
       .from('client_widgets')
       .insert({
-        user_id: user.id,
+        user_id: effectiveUserId,
         created_by: user.id,
         instance_id: original.instance_id,
         name: `${original.name} (Copy)`,

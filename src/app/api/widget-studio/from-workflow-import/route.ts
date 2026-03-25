@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isValidUUID } from '@/lib/validation';
+import { resolveEffectiveUserId } from '@/lib/teamAccess';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 
@@ -19,6 +20,8 @@ export async function POST(request: NextRequest) {
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
 
     // Parse request body
     const body = await request.json();
@@ -64,12 +67,12 @@ export async function POST(request: NextRequest) {
         .from('client_instances')
         .select('user_id, invited_by')
         .eq('instance_id', instance_id)
-        .or(`user_id.eq.${user.id},invited_by.eq.${user.id}`)
+        .or(`user_id.eq.${effectiveUserId},invited_by.eq.${effectiveUserId}`)
         .maybeSingle(),
     ]);
 
     // Verify user has access to the instance
-    const isOwner = instance?.user_id === user.id;
+    const isOwner = instance?.user_id === effectiveUserId;
     const hasClientAccess = !!clientInstance;
 
     if (!instance || (!isOwner && !hasClientAccess)) {
@@ -151,7 +154,7 @@ export async function POST(request: NextRequest) {
         chatbot_config: finalChatbotConfig,
         form_fields: widget_type === 'form' ? form_fields : null,
         styles: styles || {},
-        user_id: user.id,
+        user_id: effectiveUserId,
         instance_id: instance_id,
         workflow_id: workflow_id || null,
         workflow_name: workflow_name || null,
@@ -195,7 +198,7 @@ export async function POST(request: NextRequest) {
           const { data: newCategory } = await supabaseAdmin
             .from('widget_categories')
             .insert({
-              user_id: user.id,
+              user_id: effectiveUserId,
               name: instanceData?.instance_name || 'Client',
               description: 'Auto-created category for client components',
               color: '#6366f1',
@@ -238,7 +241,7 @@ export async function POST(request: NextRequest) {
       await supabaseAdmin
         .from('client_widgets')
         .delete()
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveUserId)
         .eq('is_active', false)
         .or('name.eq.__WORKFLOW_DRAFT__,name.like.__DRAFT__%');
     } catch (err) {

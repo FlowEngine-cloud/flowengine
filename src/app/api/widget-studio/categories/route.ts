@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit, isValidUUID } from '@/lib/validation';
+import { resolveEffectiveUserId } from '@/lib/teamAccess';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 
@@ -17,26 +18,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
 
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
+
     // Get user's owned instances AND instances where user is agency (both models)
     const [{ data: userInstances }, { data: agencyInstances }, { data: clientPaysInstances }] = await Promise.all([
       // Instances user owns directly
       supabaseAdmin
         .from('pay_per_instance_deployments')
         .select('id, instance_name')
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveUserId)
         .not('status', 'eq', 'deleted')
         .order('created_at', { ascending: false }),
       // Agency-paid model: instances via client_instances table
       supabaseAdmin
         .from('client_instances')
         .select('instance_id, pay_per_instance_deployments!inner(id, instance_name)')
-        .eq('invited_by', user.id)
+        .eq('invited_by', effectiveUserId)
         .order('created_at', { ascending: false }),
       // Client-pays model: instances where user is the inviting agency
       supabaseAdmin
         .from('pay_per_instance_deployments')
         .select('id, instance_name')
-        .eq('invited_by_user_id', user.id)
+        .eq('invited_by_user_id', effectiveUserId)
         .not('status', 'eq', 'deleted')
         .order('created_at', { ascending: false }),
     ]);
@@ -70,9 +73,9 @@ export async function GET(request: NextRequest) {
       .order('display_order', { ascending: true });
 
     if (allInstanceIds.length > 0) {
-      categoriesQuery = categoriesQuery.or(`user_id.eq.${user.id},instance_id.in.(${allInstanceIds.join(',')})`);
+      categoriesQuery = categoriesQuery.or(`user_id.eq.${effectiveUserId},instance_id.in.(${allInstanceIds.join(',')})`);
     } else {
-      categoriesQuery = categoriesQuery.eq('user_id', user.id);
+      categoriesQuery = categoriesQuery.eq('user_id', effectiveUserId);
     }
 
     const { data: categories, error } = await categoriesQuery;
@@ -119,6 +122,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
+
     const body = await request.json();
     const { name, description, color, instance_id } = body;
 
@@ -145,9 +150,9 @@ export async function POST(request: NextRequest) {
           .maybeSingle(),
       ]);
 
-      const isInstanceOwner = instance?.user_id === user.id;
-      const isAgencyPaid = clientInstance?.invited_by === user.id;
-      const isClientPays = instance?.invited_by_user_id === user.id;
+      const isInstanceOwner = instance?.user_id === effectiveUserId;
+      const isAgencyPaid = clientInstance?.invited_by === effectiveUserId;
+      const isClientPays = instance?.invited_by_user_id === effectiveUserId;
 
       if (!instance) {
         return NextResponse.json({ error: 'Instance not found' }, { status: 404 });
@@ -162,7 +167,7 @@ export async function POST(request: NextRequest) {
     const { data: maxOrderResult } = await supabaseAdmin
       .from('widget_categories')
       .select('display_order')
-      .eq('user_id', user.id)
+      .eq('user_id', effectiveUserId)
       .order('display_order', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -172,7 +177,7 @@ export async function POST(request: NextRequest) {
     const { data: category, error } = await supabaseAdmin
       .from('widget_categories')
       .insert({
-        user_id: user.id,
+        user_id: effectiveUserId,
         name: name.trim().substring(0, 50),
         description: description?.trim().substring(0, 200) || null,
         color: color || '#6366f1',

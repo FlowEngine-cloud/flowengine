@@ -120,6 +120,7 @@ CREATE TABLE IF NOT EXISTS team_members (
   token TEXT UNIQUE,
   accepted_at TIMESTAMPTZ,
   invited_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '7 days'),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

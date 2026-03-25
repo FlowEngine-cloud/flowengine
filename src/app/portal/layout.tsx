@@ -31,11 +31,16 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     }
     // Redirect back to a pending invite if one was saved before login
     if (!authLoading && user) {
-      const pending = sessionStorage.getItem('pending_invite');
-      if (pending) {
-        sessionStorage.removeItem('pending_invite');
-        router.replace(pending);
-      }
+      try {
+        const raw = localStorage.getItem('pending_invite');
+        if (raw) {
+          localStorage.removeItem('pending_invite');
+          const { url, expires } = JSON.parse(raw);
+          if (url && expires && Date.now() < expires) {
+            router.replace(url);
+          }
+        }
+      } catch { /* ignore malformed entries */ }
     }
   }, [authLoading, user, router]);
 

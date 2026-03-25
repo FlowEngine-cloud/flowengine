@@ -12,8 +12,8 @@ export async function GET(request: Request) {
   const code = searchParams.get('code');
   // If "next" or "redirect" is in the params, use it as the redirect URL
   // Validate to prevent open redirect — must start with "/" and not "//" (protocol-relative)
-  const rawNext = searchParams.get('next') ?? searchParams.get('redirect') ?? '/';
-  const next = (rawNext.startsWith('/') && !rawNext.startsWith('//')) ? rawNext : '/';
+  const rawNext = searchParams.get('next') ?? searchParams.get('redirect') ?? '/portal';
+  const next = (rawNext.startsWith('/') && !rawNext.startsWith('//')) ? rawNext : '/portal';
 
   if (code) {
     // Create the server-side client from the new SSR library
@@ -58,8 +58,7 @@ export async function GET(request: Request) {
         await serviceSupabase
           .from('profiles')
           .update({ email: user.email, full_name: user.user_metadata?.full_name || user.user_metadata?.name || null })
-          .eq('id', user.id)
-          .is('email', null);
+          .eq('id', user.id);
 
         // Check if this is a new user (just signed up)
         const userCreatedAt = user.created_at ? new Date(user.created_at) : null;

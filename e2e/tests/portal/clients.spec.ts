@@ -1,5 +1,4 @@
 import { test, expect } from '../../fixtures/auth';
-import { TEST_USERS } from '../../fixtures/testData';
 
 test.describe('Portal - Client Management', () => {
   test('should load clients page', async ({ agencyPage: page }) => {

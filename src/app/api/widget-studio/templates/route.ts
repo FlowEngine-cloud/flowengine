@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isValidWebhookUrl, sanitizeString, checkRateLimit, validateAndSanitizeCSS } from '@/lib/validation';
+import { resolveEffectiveUserId } from '@/lib/teamAccess';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 
@@ -17,6 +18,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
 
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
+
     // Check for instance filter
     const instanceId = request.nextUrl.searchParams.get('instance_id');
 
@@ -25,16 +28,16 @@ export async function GET(request: NextRequest) {
       supabaseAdmin
         .from('pay_per_instance_deployments')
         .select('id')
-        .eq('user_id', user.id),
+        .eq('user_id', effectiveUserId),
       supabaseAdmin
         .from('client_instances')
         .select('instance_id')
-        .eq('invited_by', user.id),
+        .eq('invited_by', effectiveUserId),
       // Instances where user is a client (has been invited to)
       supabaseAdmin
         .from('client_instances')
         .select('instance_id')
-        .eq('user_id', user.id),
+        .eq('user_id', effectiveUserId),
     ]);
 
     const ownedInstanceIds = userInstances?.map(i => i.id) || [];
@@ -61,10 +64,10 @@ export async function GET(request: NextRequest) {
       query = query.eq('instance_id', instanceId);
     } else if (allInstanceIds.length > 0) {
       // Show all user's widgets: owned directly OR via instance (owned or agency)
-      query = query.or(`user_id.eq.${user.id},instance_id.in.(${allInstanceIds.join(',')})`);
+      query = query.or(`user_id.eq.${effectiveUserId},instance_id.in.(${allInstanceIds.join(',')})`);
     } else {
       // User has no instances, only show directly owned widgets
-      query = query.eq('user_id', user.id);
+      query = query.eq('user_id', effectiveUserId);
     }
 
     const { data: templates, error } = await query;
@@ -104,6 +107,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
+
     const body = await request.json();
     const { name, description, widget_type, form_fields, chatbot_config, webhook_url, instance_id, styles, is_active } = body;
 
@@ -133,8 +138,8 @@ export async function POST(request: NextRequest) {
           .maybeSingle(),
       ]);
 
-      const isInstanceOwner = instance?.user_id === user.id;
-      const isAgency = clientInstance?.invited_by === user.id;
+      const isInstanceOwner = instance?.user_id === effectiveUserId;
+      const isAgency = clientInstance?.invited_by === effectiveUserId;
 
       if (!instance || (!isInstanceOwner && !isAgency)) {
         return NextResponse.json({ error: 'Instance not found' }, { status: 404 });
@@ -212,7 +217,7 @@ export async function POST(request: NextRequest) {
     const { data: template, error } = await supabaseAdmin
       .from('client_widgets')
       .insert({
-        user_id: user.id,
+        user_id: effectiveUserId,
         created_by: user.id,
         instance_id: instance_id || null,
         name: sanitizedName,

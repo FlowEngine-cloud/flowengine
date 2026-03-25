@@ -10,8 +10,9 @@ export type AuthFixtures = {
 async function loginAndNavigate(page: Page, email: string, password: string, path: string) {
   const loginPage = new LoginPage(page);
   await loginPage.login(email, password, true);
-  await page.goto(path, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(1500);
+  // Wait for auth to settle, then navigate to the target path
+  await page.goto(path);
+  await page.waitForLoadState('domcontentloaded');
 }
 
 export const test = base.extend<AuthFixtures>({

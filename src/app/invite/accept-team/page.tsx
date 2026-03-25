@@ -43,9 +43,12 @@ function AcceptTeamInviteContent() {
     if (!session?.access_token) {
       // Save invite URL so the user can return after signing in
       if (typeof window !== 'undefined') {
-        sessionStorage.setItem('pending_invite', `/invite/accept-team?token=${token}`);
+        localStorage.setItem('pending_invite', JSON.stringify({
+          url: `/invite/accept-team?token=${token}`,
+          expires: Date.now() + 30 * 60 * 1000,
+        }));
       }
-      router.push('/auth');
+      router.push('/auth?invite=1');
       return;
     }
     setAccepting(true);

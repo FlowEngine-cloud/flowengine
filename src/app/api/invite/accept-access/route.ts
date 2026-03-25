@@ -83,6 +83,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'This invitation has expired' }, { status: 410 });
     }
 
+    // Email must match the invite recipient
+    if (user.email?.toLowerCase() !== invite.email.toLowerCase()) {
+      return NextResponse.json({
+        error: `This invitation was sent to ${invite.email}. Please sign in with that email address.`,
+      }, { status: 403 });
+    }
+
     // Collect all instance IDs to link
     const instanceIds: string[] = [];
     if (invite.instance_id) instanceIds.push(invite.instance_id);

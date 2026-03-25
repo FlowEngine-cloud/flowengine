@@ -19,7 +19,7 @@ export default defineConfig({
   projects: [
     {
       name: 'api',
-      testMatch: /e2e\/(api-keys|mcp-routes)\.spec\.ts/,
+      testMatch: /e2e\/(api-keys|mcp-routes|invite-routes)\.spec\.ts/,
     },
     {
       name: 'chromium',

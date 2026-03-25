@@ -41,9 +41,12 @@ function AcceptAccessContent() {
   const handleAccept = async () => {
     if (!session?.access_token) {
       if (typeof window !== 'undefined') {
-        sessionStorage.setItem('pending_invite', `/invite/accept-access?token=${token}`);
+        localStorage.setItem('pending_invite', JSON.stringify({
+          url: `/invite/accept-access?token=${token}`,
+          expires: Date.now() + 30 * 60 * 1000,
+        }));
       }
-      router.push('/auth');
+      router.push('/auth?invite=1');
       return;
     }
 

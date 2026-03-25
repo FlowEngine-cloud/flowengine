@@ -36,6 +36,7 @@ export default function AuthPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [demoLoading, setDemoLoading] = useState(false);
+  const [isInviteFlow, setIsInviteFlow] = useState(false);
 
   const enterDemo = async () => {
     if (!DEMO_EMAIL || !DEMO_PASSWORD) return;
@@ -59,6 +60,13 @@ export default function AuthPage() {
       router.replace('/portal');
     }
   }, [loading, user, router]);
+
+  // Detect invite flow from URL param (set by invite accept pages)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsInviteFlow(new URLSearchParams(window.location.search).get('invite') === '1');
+    }
+  }, []);
 
   // Fetch auth config (public endpoint, no auth needed)
   useEffect(() => {
@@ -116,8 +124,8 @@ export default function AuthPage() {
       ) : (
         <Auth
           onSuccess={() => router.replace('/portal')}
-          initialMode={authConfig?.first_run ? 'signup' : 'signin'}
-          authConfig={authConfig}
+          initialMode={(authConfig?.first_run || isInviteFlow) ? 'signup' : 'signin'}
+          authConfig={isInviteFlow ? { ...authConfig, allow_signup: true } : authConfig}
         />
       )}
     </div>

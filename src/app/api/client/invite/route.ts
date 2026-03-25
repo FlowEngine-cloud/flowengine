@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { emailService, AgencySmtpConfig } from '@/lib/emailService';
 import { checkRateLimit, isValidEmail, isValidUUID } from '@/lib/validation';
 import { buildAppUrl } from '@/lib/config';
+import { getEffectiveOwnerId, canWrite } from '@/lib/teamUtils';
 import { resolveEffectiveUserId } from '@/lib/teamAccess';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -32,8 +33,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Resolve effective user ID for team members
-    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
+    // Resolve team context — enforce write permission
+    const ctx = await getEffectiveOwnerId(supabaseAdmin, user.id);
+    if (!canWrite(ctx.role)) {
+      return NextResponse.json({ error: 'You do not have permission to send invitations' }, { status: 403 });
+    }
+    const effectiveUserId = ctx.ownerId;
 
     // Get profile of the effective user (team owner for team members)
     const { data: profile, error: profileError } = await supabaseAdmin
@@ -142,23 +147,6 @@ export async function POST(req: NextRequest) {
     if (existingInvite) {
       return NextResponse.json(
         { error: 'An invitation has already been sent to this email address' },
-        { status: 400 }
-      );
-    }
-
-    // Check if this email already has a pending invite from ANY agency
-    // This prevents multiple agencies inviting the same person simultaneously
-    const { data: existingInviteFromOthers } = await supabaseAdmin
-      .from('client_invites')
-      .select('id, invited_by')
-      .eq('email', email.toLowerCase())
-      .eq('status', 'pending')
-      .neq('invited_by', effectiveUserId)
-      .maybeSingle();
-
-    if (existingInviteFromOthers) {
-      return NextResponse.json(
-        { error: 'This email already has a pending invitation from another agency' },
         { status: 400 }
       );
     }

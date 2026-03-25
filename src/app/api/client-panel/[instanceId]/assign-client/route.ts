@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 import { emailService } from '@/lib/emailService';
 import { isValidUUID, isValidEmail, checkRateLimit } from '@/lib/validation';
 import { buildAppUrl } from '@/lib/config';
-import { resolveEffectiveUserId } from '@/lib/teamAccess';
+import { getEffectiveOwnerId, canWrite } from '@/lib/teamUtils';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 
@@ -40,7 +40,11 @@ export async function POST(
       );
     }
 
-    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
+    const ctx = await getEffectiveOwnerId(supabaseAdmin, user.id);
+    if (!canWrite(ctx.role)) {
+      return NextResponse.json({ error: 'You do not have permission to assign clients' }, { status: 403 });
+    }
+    const effectiveUserId = ctx.ownerId;
 
     const { email } = await req.json();
 

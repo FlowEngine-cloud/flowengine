@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     const { data: ownerProfile } = await supabaseAdmin
       .from('profiles')
-      .select('tier, full_name')
+      .select('full_name')
       .eq('id', effectiveOwnerId)
       .single();
 
@@ -83,6 +83,8 @@ export async function POST(req: NextRequest) {
 
     const token = `tm_${randomBytes(24).toString('hex')}`;
 
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
     // Upsert (re-invite removed members)
     if (existing?.status === 'removed') {
       await supabaseAdmin
@@ -94,6 +96,7 @@ export async function POST(req: NextRequest) {
           member_id: null,
           accepted_at: null,
           invited_at: new Date().toISOString(),
+          expires_at: expiresAt,
         })
         .eq('id', existing.id);
     } else {
@@ -102,6 +105,7 @@ export async function POST(req: NextRequest) {
         email: normalizedEmail,
         role: role || 'member',
         token,
+        expires_at: expiresAt,
       });
 
       if (insertError) {
