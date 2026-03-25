@@ -1901,7 +1901,7 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
   if (!isPending) {
     return (
       <div className="flex-1 overflow-y-auto">
-        <N8nAccountPage embedded focusInstanceId={id} onInstanceDeleted={handleInstanceDeleted} liveStatus={liveStatus[id]} />
+        <N8nAccountPage embedded focusInstanceId={id} onInstanceDeleted={handleInstanceDeleted} liveStatus={liveStatus[id]} access={instance?.access} />
 
         {/* Danger zone — only for owners */}
         {instance?.access === 'owner' && (
