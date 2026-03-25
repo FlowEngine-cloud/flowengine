@@ -195,5 +195,15 @@ export function usePortalInstances() {
     if (!authLoading && !teamLoading && user && ownerId) fetch_();
   }, [authLoading, teamLoading, user, ownerId, fetch_]);
 
+  // Re-fetch when the FlowEngine API key is saved (dispatched by PlatformSettings)
+  useEffect(() => {
+    const handler = () => {
+      try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
+      if (!authLoading && !teamLoading && user && ownerId) fetch_();
+    };
+    window.addEventListener('flowengine-key-updated', handler);
+    return () => window.removeEventListener('flowengine-key-updated', handler);
+  }, [authLoading, teamLoading, user, ownerId, fetch_]);
+
   return { instances, loading, flowEngineError, refetch: fetch_ };
 }

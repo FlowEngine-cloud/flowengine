@@ -1484,6 +1484,16 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
     );
   }
 
+  // Instance not found after loading completes — avoid falling through to N8nAccountPage
+  if (!instance && !locallyDeleted) {
+    return (
+      <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center py-20 gap-3">
+        <Server className="w-8 h-8 text-white/20" />
+        <p className="text-white/40 text-sm">Instance not found</p>
+      </div>
+    );
+  }
+
   // FlowEngine-managed instance — full management UI
   if (instance?.platform === 'flowengine') {
     return (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthContext';
 import { usePortalRoleContext } from '@/app/portal/context';
@@ -24,17 +24,25 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
   const [flowEngineConnected, setFlowEngineConnected] = useState(false);
 
   // Check if FlowEngine API key is configured
-  useEffect(() => {
+  const checkFlowEngineConnected = useCallback(() => {
     if (!session?.access_token) return;
     fetch('/api/flowengine/pricing', {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.connected) setFlowEngineConnected(true);
+        setFlowEngineConnected(!!data?.connected);
       })
       .catch(() => {});
   }, [session?.access_token]);
+
+  useEffect(() => { checkFlowEngineConnected(); }, [checkFlowEngineConnected]);
+
+  // Re-check when FlowEngine API key is saved from settings
+  useEffect(() => {
+    window.addEventListener('flowengine-key-updated', checkFlowEngineConnected);
+    return () => window.removeEventListener('flowengine-key-updated', checkFlowEngineConnected);
+  }, [checkFlowEngineConnected]);
 
   // Client filter
   const [clientsByInstance, setClientsByInstance] = useState<Record<string, string>>({});

@@ -119,8 +119,11 @@ export function PlatformSettings() {
       setServerConfig(updatedServer);
       if (section === 'flowengine') {
         setFeConnectionStatus(null);
-        // Clear cached instance list so FlowEngine instances sync immediately
-        try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
+        // Notify hooks to re-fetch FlowEngine instances immediately
+        try {
+          sessionStorage.removeItem('portal-hosting-instances-v2');
+          window.dispatchEvent(new Event('flowengine-key-updated'));
+        } catch {}
       }
 
       setMessage({ section, type: 'success', text: 'Settings saved successfully' });
