@@ -1906,43 +1906,39 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
         {/* Danger zone — only for owners */}
         {instance?.access === 'owner' && (
           <div className="max-w-2xl mx-auto px-4 pb-6">
-            <div className="bg-gray-900/50 border border-red-800 rounded-lg p-5">
-              <p className="text-sm font-medium text-white mb-1">Danger Zone</p>
-              <p className="text-sm text-white/60 mb-4">Permanently delete this instance and cancel the subscription.</p>
-              {!showN8nDeleteConfirm ? (
-                <button
-                  onClick={() => setShowN8nDeleteConfirm(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-red-900/20 text-red-400 border border-red-800 hover:bg-red-900/30 rounded-lg text-sm font-medium transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Delete Instance
-                </button>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-sm text-red-400">
-                    This will permanently delete <span className="font-semibold">{instance.instance_name}</span> and cancel the subscription. This cannot be undone.
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleN8nDelete}
-                      disabled={n8nDeleting}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                    >
-                      {n8nDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                      Yes, Delete
-                    </button>
-                    <button
-                      onClick={() => setShowN8nDeleteConfirm(false)}
-                      disabled={n8nDeleting}
-                      className="px-3 py-2 bg-gray-800 text-white/60 hover:text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  {n8nDeleteError && <p className="text-sm text-red-400">{n8nDeleteError}</p>}
+            {!showN8nDeleteConfirm ? (
+              <button
+                onClick={() => setShowN8nDeleteConfirm(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-red-400/60 hover:text-red-400 rounded-lg text-sm transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete Instance
+              </button>
+            ) : (
+              <div className="bg-gray-900/50 border border-red-800 rounded-lg p-4 space-y-3">
+                <p className="text-sm text-red-400">
+                  Permanently delete <span className="font-semibold">{instance.instance_name}</span>? This cannot be undone.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleN8nDelete}
+                    disabled={n8nDeleting}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    {n8nDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    Yes, Delete
+                  </button>
+                  <button
+                    onClick={() => setShowN8nDeleteConfirm(false)}
+                    disabled={n8nDeleting}
+                    className="px-3 py-2 bg-gray-800 text-white/60 hover:text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
                 </div>
-              )}
-            </div>
+                {n8nDeleteError && <p className="text-sm text-red-400">{n8nDeleteError}</p>}
+              </div>
+            )}
           </div>
         )}
 
