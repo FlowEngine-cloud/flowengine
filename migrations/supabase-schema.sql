@@ -778,6 +778,11 @@ TO service_role;
 GRANT SELECT ON portal_settings, widget_categories TO anon;
 
 -- ============================================
+-- Idempotent column patches (safe to re-run on existing installs)
+-- ============================================
+ALTER TABLE portal_settings ADD COLUMN IF NOT EXISTS flowengine_api_key TEXT;
+ALTER TABLE portal_settings ADD COLUMN IF NOT EXISTS flowengine_api_url TEXT;
+
 -- ============================================
 -- Done! Your FlowEngine Portal database is ready.
 -- ============================================
