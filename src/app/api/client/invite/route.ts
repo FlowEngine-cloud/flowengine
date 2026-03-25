@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     // Get profile of the effective user (team owner for team members)
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('tier, full_name, agency_smtp_enabled, agency_smtp_host, agency_smtp_port, agency_smtp_user, agency_smtp_pass_encrypted, agency_smtp_sender')
+      .select('full_name, agency_smtp_enabled, agency_smtp_host, agency_smtp_port, agency_smtp_user, agency_smtp_pass_encrypted, agency_smtp_sender')
       .eq('id', effectiveUserId)
       .single();
 

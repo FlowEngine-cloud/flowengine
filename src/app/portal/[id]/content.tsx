@@ -256,7 +256,7 @@ function isSafeImageUrl(url: string | null | undefined): boolean {
  * When embedded=true, background effects, preview banner, and header are hidden
  * so it fits cleanly inside the portal three-column layout.
  */
-export function ClientPanelContent({ instanceId, embedded = false, portalEmbedded = false, externalTab, onTabChange, backUrl }: { instanceId: string; embedded?: boolean; portalEmbedded?: boolean; externalTab?: string; onTabChange?: (tab: string) => void; backUrl?: string }) {
+export function ClientPanelContent({ instanceId, embedded = false, portalEmbedded = false, externalTab, onTabChange, backUrl, isFlowEngine = false }: { instanceId: string; embedded?: boolean; portalEmbedded?: boolean; externalTab?: string; onTabChange?: (tab: string) => void; backUrl?: string; isFlowEngine?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { session } = useAuth();
@@ -2939,8 +2939,12 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
               {!apiKey ? (
                 <div className="text-center py-12 border border-dashed border-gray-800 rounded-xl">
                   <Key className="h-12 w-12 text-gray-700 mx-auto mb-4" />
-                  <p className="text-gray-400 mb-2">Connect your n8n instance</p>
-                  <p className="text-gray-600 text-sm mb-4">Add your n8n API key to see workflows and create UI components</p>
+                  <p className="text-gray-400 mb-2">{isFlowEngine ? 'Connect your FlowEngine n8n instance' : 'Connect your n8n instance'}</p>
+                  <p className="text-gray-600 text-sm mb-4">
+                    {isFlowEngine
+                      ? 'Add your n8n API key from your FlowEngine instance settings to see workflows and create UI components'
+                      : 'Add your n8n API key to see workflows and create UI components'}
+                  </p>
                   <button
                     onClick={() => setActiveTab('settings')}
                     className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl text-sm font-medium transition-all"

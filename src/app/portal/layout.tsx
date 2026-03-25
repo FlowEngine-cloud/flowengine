@@ -29,6 +29,14 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     if (!authLoading && !user) {
       router.replace('/auth');
     }
+    // Redirect back to a pending invite if one was saved before login
+    if (!authLoading && user) {
+      const pending = sessionStorage.getItem('pending_invite');
+      if (pending) {
+        sessionStorage.removeItem('pending_invite');
+        router.replace(pending);
+      }
+    }
   }, [authLoading, user, router]);
 
   const isClientView = IS_DEMO && DEMO_CLIENT_EMAIL && user?.email === DEMO_CLIENT_EMAIL;

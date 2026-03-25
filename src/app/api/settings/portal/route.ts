@@ -63,13 +63,10 @@ export async function GET(req: NextRequest) {
         masked[field] = '********';
       }
     }
-    // Surface FlowEngine fields stored in oauth_credentials (fallback for older installs missing the column)
+    // Surface flowengine_api_key stored in oauth_credentials (fallback for older installs missing the column)
     const oauthCreds = masked.oauth_credentials || {};
     if (!masked.flowengine_api_key && oauthCreds.flowengine_api_key) {
       masked.flowengine_api_key = '********';
-    }
-    if (!masked.flowengine_api_url && oauthCreds.flowengine_api_url) {
-      masked.flowengine_api_url = oauthCreds.flowengine_api_url;
     }
     // Remove internal fields
     delete masked.id;
@@ -119,8 +116,8 @@ export async function PATCH(req: NextRequest) {
       .limit(1)
       .maybeSingle();
 
-    // Fields that may not exist as columns in older installs — fall back to oauth_credentials JSONB
-    const JSONB_FALLBACK_FIELDS = ['flowengine_api_key', 'flowengine_api_url'];
+    // flowengine_api_key may not exist as a column in older installs — fall back to oauth_credentials JSONB
+    const JSONB_FALLBACK_FIELDS = ['flowengine_api_key'];
 
     const doUpsert = async (payload: Record<string, any>) => {
       if (existing?.id) {

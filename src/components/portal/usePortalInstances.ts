@@ -160,6 +160,14 @@ export function usePortalInstances() {
           const feData = await feRes.json();
 
           // Only FlowEngine-managed instances (not user-connected external ones)
+          // ⚠️ KNOWN ISSUE: The FE API returns ALL instances under the account — including
+          // instances provisioned for the FE account owner's own clients (e.g. "Client B").
+          // All instances share the same user_id (the FE account owner) so we cannot
+          // distinguish personal vs client-managed instances from the API response alone.
+          // Until FE exposes a portal_client_id / is_client_instance field, all FE instances
+          // are imported identically with access: 'owner'. This means FE client instances
+          // bleed into the OSS hosting list. Do NOT attempt to filter by user_id here —
+          // they are all the same. This requires a FE API change to resolve properly.
           const feManagedInstances: any[] = (feData.instances || []).filter((i: any) => !i.is_external);
           const feNameSet = new Set<string>(feManagedInstances.map((i: any) => i.instance_name));
 

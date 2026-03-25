@@ -31,6 +31,8 @@ import {
   Server,
   Settings,
   ArrowLeft,
+  Globe,
+  ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -702,8 +704,8 @@ function PortalPageContent() {
     };
   }, [allExecutions, instanceFilter, emailFilter, timeRange]);
 
-  // Active portal instances (exclude deleted and FlowEngine Cloud — those live in Hosting)
-  const activePortalInstances = useMemo(() => portalInstances.filter(i => !i.deleted_at && (i as any).platform !== 'flowengine'), [portalInstances]);
+  // Active portal instances (exclude deleted only — all types including FlowEngine Cloud get OSS portals)
+  const activePortalInstances = useMemo(() => portalInstances.filter(i => !i.deleted_at), [portalInstances]);
 
   // When a client email is selected, filter the instance list to only show their instances
   const emailFilteredInstances = useMemo(() => {
@@ -769,10 +771,11 @@ function PortalPageContent() {
             sections={(() => {
               const sections: SecondaryPanelSection[] = [];
               if (instanceFilter !== 'all') {
-                // Show tabs for the selected instance — n8n vs OpenClaw
+                // Show tabs for the selected instance — n8n vs OpenClaw vs Docker
                 const selectedInst = activePortalInstances.find(i => i.id === instanceFilter);
                 const st = selectedInst?.service_type;
                 const isOpenClaw = st === 'openclaw';
+                const isDocker = st === 'website';
                 if (isOpenClaw) {
                   sections.push({
                     title: '',
@@ -781,6 +784,11 @@ function PortalPageContent() {
                       label: tab.label,
                       icon: <tab.icon className="w-4 h-4" />,
                     })),
+                  });
+                } else if (isDocker) {
+                  sections.push({
+                    title: '',
+                    items: [{ id: 'overview', label: 'Overview', icon: <PanelsTopLeft className="w-4 h-4" /> }],
                   });
                 } else {
                   sections.push({
@@ -797,6 +805,7 @@ function PortalPageContent() {
                 const portalManaged = emailFilteredInstances;
                 const sorted = [...portalManaged].sort((a, b) => a.instance_name.localeCompare(b.instance_name));
                 const ocInsts = sorted.filter(i => (i as any).service_type === 'openclaw');
+                const dockerInsts = sorted.filter(i => (i as any).service_type === 'website');
                 const pendingInsts = sorted.filter(i => (i as any).status === 'pending_deploy');
                 const n8nInsts = sorted.filter(i => {
                   const st = (i as any).service_type;
@@ -813,13 +822,18 @@ function PortalPageContent() {
                     ? <img src="/logos/openclaw.png" className="w-5 h-5 object-contain rounded" alt="OpenClaw" />
                     : (inst as any).service_type === 'n8n'
                       ? <img src="/logos/n8n.svg" className="w-4 h-4 object-contain" alt="n8n" style={{ filter: 'brightness(0) invert(1) opacity(0.7)' }} />
-                      : <Server className="w-4 h-4" />,
+                      : (inst as any).service_type === 'website'
+                        ? <Globe className="w-4 h-4 text-white/60" />
+                        : <Server className="w-4 h-4" />,
                 });
                 if (n8nInsts.length > 0) {
                   sections.push({ title: 'n8n', icon: n8nSectionIcon, items: n8nInsts.map(mapInst) });
                 }
                 if (ocInsts.length > 0) {
                   sections.push({ title: 'OpenClaw', icon: ocSectionIcon, items: ocInsts.map(mapInst) });
+                }
+                if (dockerInsts.length > 0) {
+                  sections.push({ title: 'Docker', icon: <Globe className="w-3.5 h-3.5 text-white/60" />, items: dockerInsts.map(mapInst) });
                 }
                 if (pendingInsts.length > 0) {
                   sections.push({ title: 'Not deployed', icon: <Server className="w-3.5 h-3.5" />, items: pendingInsts.map(mapInst) });
@@ -905,10 +919,40 @@ function PortalPageContent() {
               {(() => {
                 const selectedInst = activePortalInstances.find(i => i.id === instanceFilter);
                 const st = selectedInst?.service_type;
+                const isFlowEngine = (selectedInst as any)?.platform === 'flowengine';
                 if (st === 'openclaw') {
                   return <OpenClawContent key={instanceFilter} instanceId={instanceFilter} externalTab={activePortalTab} onTabChange={setActivePortalTab} />;
                 }
-                return <ClientPanelContent key={instanceFilter} instanceId={instanceFilter} portalEmbedded externalTab={activePortalTab} onTabChange={setActivePortalTab} />;
+                if (st === 'website') {
+                  return (
+                    <div key={instanceFilter} className="flex-1 flex flex-col items-center justify-center gap-6 p-8">
+                      <div className="w-16 h-16 rounded-2xl bg-gray-800/30 flex items-center justify-center">
+                        <Globe className="w-8 h-8 text-gray-500" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-white font-semibold text-lg mb-1">{selectedInst?.instance_name}</p>
+                        {selectedInst?.instance_url && (
+                          <a
+                            href={selectedInst.instance_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 justify-center"
+                          >
+                            {selectedInst.instance_url.replace('https://', '')}
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
+                      <Link
+                        href={`/portal/hosting/${instanceFilter}`}
+                        className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg transition-colors"
+                      >
+                        Manage Instance
+                      </Link>
+                    </div>
+                  );
+                }
+                return <ClientPanelContent key={instanceFilter} instanceId={instanceFilter} portalEmbedded externalTab={activePortalTab} onTabChange={setActivePortalTab} isFlowEngine={isFlowEngine} />;
               })()}
             </div>
           </div>

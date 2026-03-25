@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isValidUUID, checkRateLimit } from '@/lib/validation';
 import { resolveEffectiveUserId } from '@/lib/teamAccess';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getPortalSettings } from '@/lib/portalSettings';
+import { createFlowEngineClient } from '@/lib/flowengine';
 
 
 // GET: List client instances for an agency
@@ -125,10 +127,29 @@ export async function GET(req: NextRequest) {
       inviteNameById.set(inv.id, inv.name);
     });
 
-    // Transform agency-invited instances (skip records with no instance data)
-    const agencyInvitedMapped = (clientInstances || [])
-      .filter((ci: ClientInstanceRecord) => ci.instance)
-      .map((ci: ClientInstanceRecord) => {
+    // Transform agency-invited instances.
+    // Records with no local instance data are FE-hosted instances (not in pay_per_instance_deployments).
+    const withLocalInstance = (clientInstances || []).filter((ci: ClientInstanceRecord) => ci.instance);
+    const withoutLocalInstance = (clientInstances || []).filter((ci: ClientInstanceRecord) => !ci.instance);
+
+    // For FE-hosted assigned instances: fetch details from FlowEngine API
+    const feInstanceMap = new Map<string, any>();
+    if (withoutLocalInstance.length > 0) {
+      try {
+        const portalSettings = await getPortalSettings();
+        const feClient = createFlowEngineClient(portalSettings.flowengine_api_key || undefined);
+        if (feClient) {
+          const feInstances = await feClient.listInstances();
+          feInstances.forEach((i: any) => feInstanceMap.set(i.id, i));
+        }
+      } catch (err) {
+        console.warn('[GET client/instances] FE instance fetch failed:', err);
+      }
+    }
+
+    const agencyInvitedMapped = [
+      // Local (OSS-hosted) instances
+      ...withLocalInstance.map((ci: ClientInstanceRecord) => {
         const invite = inviteByUserId.get(ci.user_id);
         const isDeleted = !!ci.instance?.deleted_at;
         return {
@@ -147,7 +168,32 @@ export async function GET(req: NextRequest) {
           service_type: ci.instance?.service_type || null,
           invite_status: 'accepted',
         };
-      });
+      }),
+      // FlowEngine-hosted instances (details fetched from FE API)
+      ...withoutLocalInstance
+        .filter((ci: ClientInstanceRecord) => feInstanceMap.has(ci.instance_id))
+        .map((ci: ClientInstanceRecord) => {
+          const feInst = feInstanceMap.get(ci.instance_id);
+          const invite = inviteByUserId.get(ci.user_id);
+          return {
+            instance_id: ci.instance_id,
+            user_id: ci.user_id,
+            invite_id: invite?.id,
+            instance_name: feInst.instance_name,
+            instance_url: feInst.instance_url,
+            status: feInst.status,
+            storage_limit_gb: feInst.storage_gb,
+            created_at: feInst.created_at,
+            client_email: invite?.email || clientProfiles[ci.user_id] || undefined,
+            client_name: invite?.id ? (inviteNameById.get(invite.id) || undefined) : undefined,
+            client_paid: false,
+            is_external: false,
+            service_type: feInst.service_type || 'n8n',
+            invite_status: 'accepted',
+            platform: 'flowengine' as const,
+          };
+        }),
+    ];
 
     // Transform client-invited instances (client paid, invited agency)
     const clientInvitedMapped = (clientInvitedInstances || []).map(inst => ({
@@ -269,8 +315,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Valid client_user_id required' }, { status: 400 });
     }
 
-    // Verify agency owns this instance
-    const { data: instance } = await supabaseAdmin
+    // Verify agency owns this instance (local DB first, then FE API for FE-hosted instances)
+    const { data: localInstance } = await supabaseAdmin
       .from('pay_per_instance_deployments')
       .select('id')
       .eq('id', instance_id)
@@ -278,8 +324,22 @@ export async function POST(req: NextRequest) {
       .is('deleted_at', null)
       .maybeSingle();
 
-    if (!instance) {
-      return NextResponse.json({ error: 'Instance not found or access denied' }, { status: 403 });
+    if (!localInstance) {
+      // Not in local DB — check if it's a FlowEngine-managed instance
+      let isFeOwned = false;
+      try {
+        const portalSettings = await getPortalSettings();
+        const feClient = createFlowEngineClient(portalSettings.flowengine_api_key || undefined);
+        if (feClient) {
+          await feClient.getInstance(instance_id);
+          isFeOwned = true;
+        }
+      } catch {
+        // FE instance not found or FE not configured
+      }
+      if (!isFeOwned) {
+        return NextResponse.json({ error: 'Instance not found or access denied' }, { status: 403 });
+      }
     }
 
     // Enforce one-client-per-instance rule

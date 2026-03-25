@@ -114,7 +114,7 @@ function ClientAssignmentSection({ instanceId, access }: { instanceId: string; a
         const seenIds = new Set<string>();
         const all: ClientAssignment[] = [];
         for (const ci of list) {
-          if (!ci.user_id || ci.user_id.startsWith('pending:')) continue;
+          if (!ci.user_id || ci.user_id.startsWith('pending:') || ci.user_id.startsWith('ni_')) continue;
           if (seenIds.has(ci.user_id)) continue;
           seenIds.add(ci.user_id);
           all.push({ user_id: ci.user_id, client_email: ci.client_email || ci.user_id, client_name: ci.client_name });
@@ -177,7 +177,7 @@ function ClientAssignmentSection({ instanceId, access }: { instanceId: string; a
     <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-5 space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-white">Assigned Clients</p>
-        {clientsLoaded && !showForm && available.length > 0 && (
+        {clientsLoaded && !showForm && clientAssignments.length === 0 && available.length > 0 && (
           <button
             onClick={() => setShowForm(true)}
             className="flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors"
@@ -445,9 +445,6 @@ function FlowEngineInstanceDetail(props: { instance: PortalInstance; onDeleted: 
           </div>
           {actionError && <p className="text-sm text-red-400 mt-3">{actionError}</p>}
         </div>
-
-        {/* Client assignment */}
-        <ClientAssignmentSection instanceId={instance.id} access={instance.access} />
 
       </div>
     </div>

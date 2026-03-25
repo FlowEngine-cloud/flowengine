@@ -167,7 +167,14 @@ class FlowEngineClient {
     return this.request('POST', '/api/v1/n8n/instances', opts);
   }
 
-  /** List all n8n instances — API returns { success, instances: [] } */
+  /**
+   * List all n8n instances — API returns { success, instances: [] }
+   *
+   * ⚠️ KNOWN ISSUE: Returns ALL instances under the FE account, including instances
+   * provisioned for the FE account owner's clients. All share the same user_id.
+   * The OSS cannot distinguish personal vs client-managed instances until FE exposes
+   * a portal_client_id or is_client_instance field on the response.
+   */
   async listInstances(): Promise<FlowEngineInstance[]> {
     const res = await this.request<{ success: boolean; instances: FlowEngineInstance[] }>('GET', '/api/v1/n8n/instances');
     return res.instances ?? [];

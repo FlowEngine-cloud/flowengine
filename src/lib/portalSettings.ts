@@ -77,7 +77,7 @@ export async function getPortalSettings(): Promise<PortalSettings> {
       .from('portal_settings')
       .select('*')
       .limit(1)
-      .single();
+      .maybeSingle();
 
     const settings: Record<string, any> = {};
     const oauthCreds: Record<string, any> = data?.oauth_credentials || {};

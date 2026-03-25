@@ -223,7 +223,7 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
     // FlowEngine Cloud instances — use their API-provided status directly, no local polling
     if (inst.platform === 'flowengine') {
       const s = inst.status;
-      if (s === 'running' || s === 'active') return 'active';
+      if (s === 'running' || s === 'active' || s === 'unhealthy') return 'active';
       if (s === 'stopped' || s === 'error' || s === 'failed' || s === 'exited') return 'error';
       if (s === 'deploying' || s === 'provisioning' || s === 'starting' || s === 'restarting' || s === 'updating') return 'connecting';
       return 'loading';
