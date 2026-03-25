@@ -363,12 +363,12 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
             searchPlaceholder="Search instances..."
             action={isClient ? undefined : (
               <div className="space-y-2">
-                {flowEngineError && (
+                {flowEngineConnected && flowEngineError && (
                   <div className="flex items-start gap-1.5 px-2 py-1.5 bg-yellow-900/10 border border-yellow-800/30 rounded-md">
                     <AlertTriangle className="w-3 h-3 text-yellow-500/70 mt-0.5 flex-shrink-0" />
                     <div className="min-w-0">
                       <p className="text-xs text-yellow-500/80 font-medium">FlowEngine sync failed</p>
-                      <a href="/portal/settings#flowengine" className="text-xs text-yellow-400/50 hover:text-yellow-400 underline underline-offset-2">Configure API key →</a>
+                      <a href="/portal/settings#flowengine" className="text-xs text-yellow-400/50 hover:text-yellow-400 underline underline-offset-2">Check settings →</a>
                     </div>
                   </div>
                 )}

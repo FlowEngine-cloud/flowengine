@@ -1239,7 +1239,7 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
   const [dockerImage, setDockerImage] = useState('');
   const [dockerPort, setDockerPort] = useState('3000');
   const [openingBilling, setOpeningBilling] = useState(false);
-  const [locallyDeleted, setLocallyDeleted] = useState(false);
+  const [locallyDeleted] = useState(false);
   const [showN8nDeleteConfirm, setShowN8nDeleteConfirm] = useState(false);
   const [n8nDeleting, setN8nDeleting] = useState(false);
   const [n8nDeleteError, setN8nDeleteError] = useState<string | null>(null);
@@ -1331,10 +1331,10 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
   };
 
   const handleInstanceDeleted = useCallback(async () => {
-    setLocallyDeleted(true);
     try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
     await Promise.all([refetchInstances(), refetchLocal()]);
-  }, [refetchInstances, refetchLocal]);
+    router.push('/portal/hosting');
+  }, [refetchInstances, refetchLocal, router]);
 
   const handleFlowEngineDeleted = useCallback(async () => {
     await Promise.all([refetchInstances(), refetchLocal()]);

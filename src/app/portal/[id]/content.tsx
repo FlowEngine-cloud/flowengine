@@ -1052,6 +1052,10 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
       } finally {
         setLoading(false);
         setInitialLoadComplete(true);
+        // Reset all loading states so UI never gets stuck in an infinite spinner
+        setWorkflowsLoading(false);
+        setWidgetsLoading(false);
+        setExecutionsLoading(false);
       }
     };
 

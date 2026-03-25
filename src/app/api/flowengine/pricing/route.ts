@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPortalSettings } from '@/lib/portalSettings';
+import { getPortalSettings, invalidateSettingsCache } from '@/lib/portalSettings';
 import { createFlowEngineClient } from '@/lib/flowengine';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -66,6 +66,8 @@ export async function POST(req: NextRequest) {
     const providedKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : null;
 
     let apiKey: string | null = providedKey;
+    // Always read fresh from DB for the test — avoids stale module-level cache across workers
+    invalidateSettingsCache();
     const settings = await getPortalSettings();
 
     if (!apiKey) {
