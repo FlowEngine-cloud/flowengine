@@ -40,31 +40,91 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   starting:     { label: 'Starting',     cls: 'text-yellow-400 bg-yellow-900/20 border-yellow-800' },
 };
 
+// ─── Inline name editor (same pattern as other instance types) ────────────────
+
+function InlineNameEditor({
+  name,
+  onSave,
+  saving,
+}: {
+  name: string;
+  onSave: (newName: string) => Promise<void>;
+  saving: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+
+  const handleSave = async () => {
+    if (!draft.trim() || draft.trim() === name) { setEditing(false); return; }
+    await onSave(draft.trim());
+    setEditing(false);
+  };
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2 min-w-0">
+        <p className="text-white font-semibold truncate">{name}</p>
+        <button
+          onClick={() => { setDraft(name); setEditing(true); }}
+          className="p-1 rounded hover:bg-gray-700 text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 min-w-0 flex-1">
+      <input
+        autoFocus
+        type="text"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
+        maxLength={50}
+        className="flex-1 min-w-0 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-white"
+      />
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="p-1 rounded hover:bg-gray-700 text-green-400 hover:text-green-300 transition-colors flex-shrink-0 disabled:opacity-50"
+      >
+        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+      </button>
+      <button
+        onClick={() => setEditing(false)}
+        className="p-1 rounded hover:bg-gray-700 text-white/40 hover:text-white/60 transition-colors flex-shrink-0"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatusProp, access }: N8nAccountPageProps) {
   const { session } = useAuth();
   const [instance, setInstance] = useState<InstanceData | null>(null);
   const [loading, setLoading] = useState(!!focusInstanceId);
-
-  // Name editing
-  const [editingName, setEditingName] = useState(false);
-  const [nameInput, setNameInput] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
 
-  // API key editing
+  // API key
   const [showApiKey, setShowApiKey] = useState(false);
   const [editingApiKey, setEditingApiKey] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [apiKeySaving, setApiKeySaving] = useState(false);
 
-  // Client assignment (owner only)
-  const [clientAssignments, setClientAssignments] = useState<ClientAssignment[]>([]);
+  // Client assignment — one client per instance
+  const [clientAssignment, setClientAssignment] = useState<ClientAssignment | null>(null);
   const [allAgencyClients, setAllAgencyClients] = useState<ClientAssignment[]>([]);
   const [clientsLoaded, setClientsLoaded] = useState(false);
   const [showAssignClientForm, setShowAssignClientForm] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState('');
   const [assigningClient, setAssigningClient] = useState(false);
   const [assignClientError, setAssignClientError] = useState<string | null>(null);
-  const [revokingClientId, setRevokingClientId] = useState<string | null>(null);
+  const [revokingClient, setRevokingClient] = useState(false);
 
   useEffect(() => {
     if (!focusInstanceId) { setLoading(false); return; }
@@ -79,7 +139,7 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
       });
   }, [focusInstanceId]);
 
-  // Load client assignments (owner only)
+  // Load single client assignment (owner only)
   const loadClients = useCallback(async () => {
     if (!session?.access_token || !focusInstanceId) return;
     try {
@@ -89,6 +149,8 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
       if (!res.ok) return;
       const data = await res.json();
       const instances: any[] = data.instances || [];
+
+      // All agency clients (deduped)
       const seenIds = new Set<string>();
       const all: ClientAssignment[] = [];
       for (const ci of instances) {
@@ -98,10 +160,15 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
         all.push({ user_id: ci.user_id, client_email: ci.client_email || ci.user_id, client_name: ci.client_name });
       }
       setAllAgencyClients(all);
-      const assigned = instances
-        .filter(ci => ci.instance_id === focusInstanceId && !ci.user_id?.startsWith('pending:') && !ci.client_paid)
-        .map(ci => ({ user_id: ci.user_id, client_email: ci.client_email || ci.user_id, client_name: ci.client_name }));
-      setClientAssignments(assigned);
+
+      // One assigned client for this instance
+      const assigned = instances.find(ci =>
+        ci.instance_id === focusInstanceId && !ci.user_id?.startsWith('pending:') && !ci.client_paid
+      );
+      setClientAssignment(assigned
+        ? { user_id: assigned.user_id, client_email: assigned.client_email || assigned.user_id, client_name: assigned.client_name }
+        : null
+      );
     } catch { /* silent */ } finally {
       setClientsLoaded(true);
     }
@@ -111,19 +178,16 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
     if (access === 'owner') loadClients();
   }, [access, loadClients]);
 
-  const handleSaveName = async () => {
-    if (!session?.access_token || !nameInput.trim() || !instance) return;
+  const handleRename = async (newName: string) => {
+    if (!session?.access_token || !instance) return;
     setNameSaving(true);
     try {
       const res = await fetch('/api/hosting/rename', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ instanceId: instance.id, newName: nameInput.trim() }),
+        body: JSON.stringify({ instanceId: instance.id, newName }),
       });
-      if (res.ok) {
-        setInstance({ ...instance, instance_name: nameInput.trim() });
-        setEditingName(false);
-      }
+      if (res.ok) setInstance(prev => prev ? { ...prev, instance_name: newName } : prev);
     } catch { /* silent */ } finally {
       setNameSaving(false);
     }
@@ -138,7 +202,7 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
         .update({ n8n_api_key: apiKeyInput.trim() })
         .eq('id', instance.id);
       if (!error) {
-        setInstance({ ...instance, n8n_api_key: apiKeyInput.trim() });
+        setInstance(prev => prev ? { ...prev, n8n_api_key: apiKeyInput.trim() } : prev);
         setEditingApiKey(false);
         setApiKeyInput('');
         setShowApiKey(false);
@@ -161,7 +225,7 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
       const data = await res.json();
       if (!res.ok) { setAssignClientError(data.error || 'Failed to assign client'); return; }
       const client = allAgencyClients.find(c => c.user_id === selectedClientId);
-      if (client) setClientAssignments(prev => [...prev, client]);
+      if (client) setClientAssignment(client);
       setShowAssignClientForm(false);
       setSelectedClientId('');
     } catch {
@@ -171,18 +235,18 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
     }
   };
 
-  const handleRevokeClient = async (clientUserId: string) => {
-    if (!session?.access_token || !focusInstanceId) return;
-    setRevokingClientId(clientUserId);
+  const handleRevokeClient = async () => {
+    if (!session?.access_token || !clientAssignment || !focusInstanceId) return;
+    setRevokingClient(true);
     try {
       const res = await fetch('/api/client/instances', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ instance_id: focusInstanceId, user_id: clientUserId }),
+        body: JSON.stringify({ instance_id: focusInstanceId, user_id: clientAssignment.user_id }),
       });
-      if (res.ok) setClientAssignments(prev => prev.filter(c => c.user_id !== clientUserId));
+      if (res.ok) setClientAssignment(null);
     } catch { /* silent */ } finally {
-      setRevokingClientId(null);
+      setRevokingClient(false);
     }
   };
 
@@ -224,36 +288,10 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
             <img src={iconSrc} className="w-5 h-5 object-contain" alt="" style={iconStyle} />
           </div>
           <div className="flex-1 min-w-0">
-            {editingName ? (
-              <div className="flex items-center gap-2">
-                <input
-                  autoFocus
-                  value={nameInput}
-                  onChange={e => setNameInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') setEditingName(false); }}
-                  className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm font-semibold focus:outline-none focus:border-white"
-                  maxLength={50}
-                />
-                <button onClick={handleSaveName} disabled={nameSaving} className="p-1 text-green-400 hover:text-green-300 disabled:opacity-50">
-                  {nameSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                </button>
-                <button onClick={() => setEditingName(false)} className="p-1 text-white/40 hover:text-white/70">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 group">
-                <p className="text-white font-semibold truncate">{instance.instance_name}</p>
-                {isOwner && (
-                  <button
-                    onClick={() => { setNameInput(instance.instance_name); setEditingName(true); }}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-white/30 hover:text-white/70 transition-all"
-                  >
-                    <Pencil className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-            )}
+            {isOwner
+              ? <InlineNameEditor name={instance.instance_name} onSave={handleRename} saving={nameSaving} />
+              : <p className="text-white font-semibold truncate">{instance.instance_name}</p>
+            }
             {instance.is_external ? (
               <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full border mt-1 text-gray-400 bg-gray-800/30 border-gray-700">External</span>
             ) : (
@@ -285,7 +323,7 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
               <p className="text-white font-medium">{created}</p>
             </div>
           )}
-          {/* API Key cell */}
+          {/* API Key — show if exists or owner can set one */}
           {(instance.n8n_api_key || isOwner) && (
             <div className="bg-gray-800/30 rounded-lg p-3">
               <p className="text-xs text-white/40 mb-1">API Key</p>
@@ -300,15 +338,15 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
                     placeholder="Paste new key…"
                     className="flex-1 min-w-0 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-white text-xs font-mono focus:outline-none focus:border-white"
                   />
-                  <button onClick={handleSaveApiKey} disabled={apiKeySaving || !apiKeyInput.trim()} className="p-1 text-green-400 hover:text-green-300 disabled:opacity-50">
+                  <button onClick={handleSaveApiKey} disabled={apiKeySaving || !apiKeyInput.trim()} className="p-1 rounded hover:bg-gray-700 text-green-400 hover:text-green-300 transition-colors disabled:opacity-50">
                     {apiKeySaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                   </button>
-                  <button onClick={() => { setEditingApiKey(false); setApiKeyInput(''); }} className="p-1 text-white/40 hover:text-white/70">
+                  <button onClick={() => { setEditingApiKey(false); setApiKeyInput(''); }} className="p-1 rounded hover:bg-gray-700 text-white/40 hover:text-white/60 transition-colors">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-1 group">
+                <div className="flex items-center gap-1">
                   <p className="text-white font-medium text-xs font-mono flex-1 truncate">
                     {instance.n8n_api_key
                       ? (showApiKey ? instance.n8n_api_key : '••••••••')
@@ -316,15 +354,12 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
                     }
                   </p>
                   {instance.n8n_api_key && (
-                    <button onClick={() => setShowApiKey(v => !v)} className="opacity-0 group-hover:opacity-100 p-0.5 text-white/30 hover:text-white/70 transition-all">
+                    <button onClick={() => setShowApiKey(v => !v)} className="p-1 rounded hover:bg-gray-700 text-white/30 hover:text-white/60 transition-colors">
                       {showApiKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                     </button>
                   )}
                   {isOwner && (
-                    <button
-                      onClick={() => { setEditingApiKey(true); setApiKeyInput(''); }}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 text-white/30 hover:text-white/70 transition-all"
-                    >
+                    <button onClick={() => { setEditingApiKey(true); setApiKeyInput(''); }} className="p-1 rounded hover:bg-gray-700 text-white/30 hover:text-white/60 transition-colors">
                       <Pencil className="w-3 h-3" />
                     </button>
                   )}
@@ -335,12 +370,12 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
         </div>
       </div>
 
-      {/* Assigned Clients — owner only */}
+      {/* Assigned Client — one per instance, owner only */}
       {isOwner && (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 space-y-3">
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-white">Assigned Clients</p>
-            {clientsLoaded && !showAssignClientForm && allAgencyClients.filter(c => !clientAssignments.some(a => a.user_id === c.user_id)).length > 0 && (
+            <p className="text-sm font-medium text-white">Assigned Client</p>
+            {clientsLoaded && !clientAssignment && !showAssignClientForm && allAgencyClients.length > 0 && (
               <button
                 onClick={() => setShowAssignClientForm(true)}
                 className="flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors"
@@ -351,16 +386,17 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
           </div>
 
           {showAssignClientForm && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <SearchableSelect
                 value={selectedClientId}
                 onChange={setSelectedClientId}
                 placeholder="Select a client..."
                 options={[
                   { value: '', label: 'Select a client...' },
-                  ...allAgencyClients
-                    .filter(c => !clientAssignments.some(a => a.user_id === c.user_id))
-                    .map(c => ({ value: c.user_id, label: c.client_name ? `${c.client_name} (${c.client_email})` : c.client_email })),
+                  ...allAgencyClients.map(c => ({
+                    value: c.user_id,
+                    label: c.client_name ? `${c.client_name} (${c.client_email})` : c.client_email,
+                  })),
                 ]}
               />
               {assignClientError && <p className="text-xs text-red-400">{assignClientError}</p>}
@@ -384,27 +420,23 @@ export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatus
 
           {!clientsLoaded ? (
             <Loader2 className="w-4 h-4 animate-spin text-white/30" />
-          ) : clientAssignments.length === 0 ? (
-            <p className="text-sm text-white/40">No clients assigned</p>
+          ) : !clientAssignment ? (
+            <p className="text-sm text-white/40">No client assigned</p>
           ) : (
-            <div className="space-y-2">
-              {clientAssignments.map(c => (
-                <div key={c.user_id} className="flex items-center gap-3 p-3 bg-gray-900/50 border border-gray-800 rounded-lg">
-                  <Users className="w-4 h-4 text-white/30 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    {c.client_name && <p className="text-sm font-medium text-white truncate">{c.client_name}</p>}
-                    <p className="text-sm text-white/60 truncate">{c.client_email}</p>
-                  </div>
-                  <button
-                    onClick={() => handleRevokeClient(c.user_id)}
-                    disabled={revokingClientId === c.user_id}
-                    className="p-1.5 rounded-lg hover:bg-red-900/30 text-white/20 hover:text-red-400 transition-colors disabled:opacity-50"
-                    title="Revoke access"
-                  >
-                    {revokingClientId === c.user_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              ))}
+            <div className="flex items-center gap-3 p-3 bg-gray-900/50 border border-gray-800 rounded-lg">
+              <Users className="w-4 h-4 text-white/30 shrink-0" />
+              <div className="flex-1 min-w-0">
+                {clientAssignment.client_name && <p className="text-sm font-medium text-white truncate">{clientAssignment.client_name}</p>}
+                <p className="text-sm text-white/60 truncate">{clientAssignment.client_email}</p>
+              </div>
+              <button
+                onClick={handleRevokeClient}
+                disabled={revokingClient}
+                className="p-1.5 rounded-lg hover:bg-red-900/30 text-white/20 hover:text-red-400 transition-colors disabled:opacity-50"
+                title="Revoke access"
+              >
+                {revokingClient ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+              </button>
             </div>
           )}
         </div>
