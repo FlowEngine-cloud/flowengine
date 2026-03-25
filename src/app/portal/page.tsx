@@ -773,33 +773,28 @@ function PortalPageContent() {
                 const selectedInst = activePortalInstances.find(i => i.id === instanceFilter);
                 const st = selectedInst?.service_type;
                 const isOpenClaw = st === 'openclaw';
-                const isFlowEngine = (selectedInst as any)?.platform === 'flowengine';
-                // FlowEngine instances don't have portal tabs — managed in Hosting
-                if (!isFlowEngine) {
-                  if (isOpenClaw) {
-                    sections.push({
-                      title: '',
-                      items: OPENCLAW_TABS_LIST.map((tab) => ({
-                        id: tab.id,
-                        label: tab.label,
-                        icon: <tab.icon className="w-4 h-4" />,
-                      })),
-                    });
-                  } else {
-                    sections.push({
-                      title: '',
-                      items: INSTANCE_TABS.map((tab) => ({
-                        id: tab.id,
-                        label: tab.label,
-                        icon: <tab.icon className="w-4 h-4" />,
-                      })),
-                    });
-                  }
+                if (isOpenClaw) {
+                  sections.push({
+                    title: '',
+                    items: OPENCLAW_TABS_LIST.map((tab) => ({
+                      id: tab.id,
+                      label: tab.label,
+                      icon: <tab.icon className="w-4 h-4" />,
+                    })),
+                  });
+                } else {
+                  sections.push({
+                    title: '',
+                    items: INSTANCE_TABS.map((tab) => ({
+                      id: tab.id,
+                      label: tab.label,
+                      icon: <tab.icon className="w-4 h-4" />,
+                    })),
+                  });
                 }
               } else {
                 // Show instance list grouped by service type
-                // Exclude FlowEngine Cloud instances — they live in Hosting, not here
-                const portalManaged = emailFilteredInstances.filter(i => (i as any).platform !== 'flowengine');
+                const portalManaged = emailFilteredInstances;
                 const sorted = [...portalManaged].sort((a, b) => a.instance_name.localeCompare(b.instance_name));
                 const ocInsts = sorted.filter(i => (i as any).service_type === 'openclaw');
                 const pendingInsts = sorted.filter(i => (i as any).status === 'pending_deploy');
@@ -910,44 +905,8 @@ function PortalPageContent() {
               {(() => {
                 const selectedInst = activePortalInstances.find(i => i.id === instanceFilter);
                 const st = selectedInst?.service_type;
-                // FlowEngine Cloud instances are managed in Hosting, not here
-                if ((selectedInst as any)?.platform === 'flowengine') {
-                  return (
-                    <div className="flex flex-col items-center justify-center h-full gap-5 p-8 text-center">
-                      <div className="w-12 h-12 bg-gray-900 border border-gray-800 rounded-xl flex items-center justify-center">
-                        <Server className="w-6 h-6 text-white/30" />
-                      </div>
-                      <div>
-                        <p className="text-white font-medium mb-1">{selectedInst?.instance_name}</p>
-                        <p className="text-sm text-white/50">This instance is hosted on FlowEngine Cloud.<br />Manage it from the Hosting section.</p>
-                      </div>
-                      <Link href={`/portal/hosting/${instanceFilter}`} className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors">
-                        Go to Hosting
-                        <ArrowLeft className="w-4 h-4 rotate-180" />
-                      </Link>
-                    </div>
-                  );
-                }
                 if (st === 'openclaw') {
                   return <OpenClawContent key={instanceFilter} instanceId={instanceFilter} externalTab={activePortalTab} onTabChange={setActivePortalTab} />;
-                }
-                // External instances and link-type instances → managed in Hosting
-                if (selectedInst?.is_external || st === 'other') {
-                  return (
-                    <div className="flex flex-col items-center justify-center h-full gap-5 p-8 text-center">
-                      <div className="w-12 h-12 bg-gray-900 border border-gray-800 rounded-xl flex items-center justify-center">
-                        <Server className="w-6 h-6 text-white/30" />
-                      </div>
-                      <div>
-                        <p className="text-white font-medium mb-1">{selectedInst?.instance_name}</p>
-                        <p className="text-sm text-white/50">This is an external instance.<br />Manage it from the Hosting section.</p>
-                      </div>
-                      <Link href={`/portal/hosting/${instanceFilter}`} className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors">
-                        Go to Hosting
-                        <ArrowLeft className="w-4 h-4 rotate-180" />
-                      </Link>
-                    </div>
-                  );
                 }
                 return <ClientPanelContent key={instanceFilter} instanceId={instanceFilter} portalEmbedded externalTab={activePortalTab} onTabChange={setActivePortalTab} />;
               })()}

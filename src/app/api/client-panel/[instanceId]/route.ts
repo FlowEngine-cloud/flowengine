@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isValidUUID } from '@/lib/validation';
 import { resolveEffectiveUserId } from '@/lib/teamAccess';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getPortalSettings } from '@/lib/portalSettings';
+import { createFlowEngineClient } from '@/lib/flowengine';
 
 
 // GET: Get instance info and client access for agency's instance
@@ -63,6 +65,53 @@ export async function GET(
           isDedicated: true,
           n8n_api_key: n8nInstance.n8n_api_key || null,
         };
+      }
+    }
+
+    // If not found locally, try FlowEngine API (auto-link FlowEngine-hosted instances)
+    if (!instanceError && !instance && !dedicatedInstance) {
+      try {
+        const settings = await getPortalSettings();
+        if (settings.flowengine_api_key) {
+          const feClient = createFlowEngineClient(settings.flowengine_api_key);
+          const feInstance = await feClient.getInstance(instanceId).catch(() => null);
+          if (feInstance && !feInstance.is_external) {
+            // Auto-upsert a local shadow record so API keys etc. can be saved
+            await supabaseAdmin.from('pay_per_instance_deployments').upsert({
+              id: instanceId,
+              user_id: effectiveUserId,
+              instance_name: feInstance.instance_name,
+              instance_url: feInstance.instance_url,
+              status: feInstance.status,
+              service_type: feInstance.service_type || 'n8n',
+              is_external: false,
+              hosting_mode: 'cloud',
+              storage_limit_gb: feInstance.storage_gb || 10,
+            }, { onConflict: 'id' });
+
+            return NextResponse.json({
+              instance: {
+                id: instanceId,
+                instance_name: feInstance.instance_name,
+                instance_url: feInstance.instance_url,
+                status: feInstance.status,
+                storage_limit_gb: feInstance.storage_gb || 10,
+                is_external: false,
+                n8n_api_key: null,
+              },
+              client: null,
+              isOwner: true,
+              isAgencyManager: false,
+              isDedicated: false,
+              shouldUseClientPortal: false,
+              allowFullAccess: true,
+              instanceCategory: null,
+              hasLinkedClient: false,
+            });
+          }
+        }
+      } catch {
+        // FlowEngine API unavailable — fall through to normal 403
       }
     }
 
