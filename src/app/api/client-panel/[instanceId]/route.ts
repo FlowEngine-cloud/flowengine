@@ -78,8 +78,38 @@ export async function GET(
         .eq('invited_by', effectiveUserId)
         .maybeSingle();
 
-      // SECURITY: Check if instance exists and is not deleted
+      // Check if the current user is a CLIENT of this instance (agency-invites-client flow)
       if (!clientInstance || !clientInstance.instance || clientInstance.instance.deleted_at) {
+        const { data: myClientAccess } = await supabaseAdmin
+          .from('client_instances')
+          .select('allow_full_access, instance:pay_per_instance_deployments(id, instance_name, instance_url, status, storage_limit_gb, is_external, deleted_at)')
+          .eq('instance_id', instanceId)
+          .eq('user_id', effectiveUserId)
+          .maybeSingle();
+
+        const clientInst = myClientAccess?.instance as any;
+        if (myClientAccess && clientInst && !clientInst.deleted_at) {
+          return NextResponse.json({
+            instance: {
+              id: clientInst.id,
+              instance_name: clientInst.instance_name,
+              instance_url: clientInst.instance_url,
+              status: clientInst.status,
+              storage_limit_gb: clientInst.storage_limit_gb,
+              is_external: clientInst.is_external || false,
+              n8n_api_key: null, // clients do not manage the API key
+            },
+            client: null,
+            isOwner: false,
+            isAgencyManager: false,
+            isDedicated: false,
+            shouldUseClientPortal: true,
+            allowFullAccess: myClientAccess.allow_full_access ?? false,
+            instanceCategory: null,
+            hasLinkedClient: false,
+          });
+        }
+
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
       }
 

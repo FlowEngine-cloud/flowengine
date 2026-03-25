@@ -1331,13 +1331,18 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
   };
 
   const handleInstanceDeleted = useCallback(async () => {
-    try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
-    await Promise.all([refetchInstances(), refetchLocal()]);
+    try {
+      sessionStorage.removeItem('portal-hosting-instances-v2');
+      await Promise.all([refetchInstances(), refetchLocal()]);
+    } catch {}
     router.push('/portal/hosting');
   }, [refetchInstances, refetchLocal, router]);
 
   const handleFlowEngineDeleted = useCallback(async () => {
-    await Promise.all([refetchInstances(), refetchLocal()]);
+    try {
+      sessionStorage.removeItem('portal-hosting-instances-v2');
+      await Promise.all([refetchInstances(), refetchLocal()]);
+    } catch {}
     router.push('/portal/hosting');
   }, [refetchInstances, refetchLocal, router]);
 

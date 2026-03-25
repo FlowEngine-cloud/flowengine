@@ -881,7 +881,7 @@ function PortalPageContent() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Content area */}
-        {instanceFilter !== 'all' && !showContentSkeleton ? (
+        {instanceFilter !== 'all' ? (
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Header bar — breadcrumb */}
             <div className="flex-shrink-0 border-b border-gray-800 px-6 h-[64px] flex items-center gap-3 min-w-0">

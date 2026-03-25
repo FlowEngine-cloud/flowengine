@@ -1062,7 +1062,9 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
     fetchData();
   }, [session, instanceId, router, isPreviewMode]);
 
-  const fetchWorkflows = async () => {
+  // skipVerification: true when called right after save/verify — don't let a transient
+  // n8n error override the verified=true that was just confirmed by the verify-api step.
+  const fetchWorkflows = async (skipVerification = false) => {
     try {
       const res = await fetch(`/api/client-panel/${instanceId}/workflows`, {
         headers: { Authorization: `Bearer ${session?.access_token}` },
@@ -1070,22 +1072,23 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
       if (res.ok) {
         const data = await res.json();
         setWorkflows(data.workflows || []);
-        // Silently verify in background - update status based on API response
-        // This catches cases where API key becomes invalid after being saved
-        if (data.workflows && !data.error) {
-          setApiVerified(true);
-          setApiError(null);
-        } else if (data.error) {
-          setApiVerified(false);
-          setApiError(data.error);
+        if (!skipVerification) {
+          // Update verification status based on API response
+          // This catches cases where API key becomes invalid after being saved
+          if (data.workflows && !data.error) {
+            setApiVerified(true);
+            setApiError(null);
+          } else if (data.error) {
+            setApiVerified(false);
+            setApiError(data.error);
+          }
         }
-      } else {
-        // API call failed - mark as not verified
+      } else if (!skipVerification) {
         setApiVerified(false);
       }
     } catch (error) {
       console.error('Failed to fetch workflows:', error);
-      setApiVerified(false);
+      if (!skipVerification) setApiVerified(false);
     } finally {
       setWorkflowsLoading(false);
     }
@@ -1224,8 +1227,9 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
       if (!verifyData.verified && verifyData.error) {
         setApiError(verifyData.error);
       } else if (verifyData.verified) {
-        // Refresh all data with new API key / external URL
-        fetchWorkflows();
+        // Refresh all data with new API key / external URL.
+        // skipVerification=true so a transient n8n error doesn't flip verified back to false.
+        fetchWorkflows(true);
         refetchExecutions(timeRange);
       }
     } catch (error) {
