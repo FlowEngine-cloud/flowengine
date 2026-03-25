@@ -9,6 +9,8 @@ interface N8nAccountPageProps {
   embedded?: boolean;
   focusInstanceId?: string;
   onInstanceDeleted?: () => void;
+  /** Live status from hosting layout polling (overrides stale DB status) */
+  liveStatus?: string;
 }
 
 interface InstanceData {
@@ -33,7 +35,7 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   starting:     { label: 'Starting',     cls: 'text-yellow-400 bg-yellow-900/20 border-yellow-800' },
 };
 
-export default function N8nAccountPage({ focusInstanceId }: N8nAccountPageProps) {
+export default function N8nAccountPage({ focusInstanceId, liveStatus: liveStatusProp }: N8nAccountPageProps) {
   const { session } = useAuth();
   const [instance, setInstance] = useState<InstanceData | null>(null);
   const [loading, setLoading] = useState(!!focusInstanceId);
@@ -92,7 +94,8 @@ export default function N8nAccountPage({ focusInstanceId }: N8nAccountPageProps)
     );
   }
 
-  const s = STATUS_MAP[instance.status] ?? { label: instance.status, cls: 'text-gray-400 bg-gray-800/30 border-gray-700' };
+  const effectiveStatus = liveStatusProp || instance.status;
+  const s = STATUS_MAP[effectiveStatus] ?? { label: effectiveStatus, cls: 'text-gray-400 bg-gray-800/30 border-gray-700' };
   const created = instance.created_at ? new Date(instance.created_at).toLocaleDateString() : null;
   const iconSrc = instance.service_type === 'openclaw' ? '/logos/openclaw.png' : '/logos/n8n.svg';
   const iconStyle = instance.service_type === 'openclaw'

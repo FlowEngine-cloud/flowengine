@@ -1578,18 +1578,16 @@ function ExternalInstanceDetail({ instance, onDeleted }: { instance: PortalInsta
           </div>
         </div>
 
-        {/* Danger zone */}
+        {/* Remove */}
         {instance.access === 'owner' && (
-          <div className="bg-gray-900/50 border border-red-800 rounded-lg p-5">
-            <p className="text-sm font-medium text-white mb-1">Danger Zone</p>
-            <p className="text-sm text-white/60 mb-4">Remove this external service from your portal.</p>
+          <div className="border-t border-gray-800 pt-4">
             {!showDeleteConfirm ? (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-1.5 px-3 py-2 bg-red-900/20 text-red-400 border border-red-800 hover:bg-red-900/30 rounded-lg text-sm font-medium transition-colors"
+                className="flex items-center gap-1.5 text-sm text-white/30 hover:text-red-400 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                Remove
+                Remove from portal
               </button>
             ) : (
               <div className="space-y-3">
@@ -1662,7 +1660,7 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const { session } = useAuth();
   const router = useRouter();
-  const { refetchInstances } = useHostingContext();
+  const { refetchInstances, liveStatus } = useHostingContext();
   const { instances, loading: instancesLoading, refetch: refetchLocal } = usePortalInstances();
 
   const [selectedService, setSelectedService] = useState<ServiceType | null>(null);
@@ -1672,6 +1670,9 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
   const [dockerPort, setDockerPort] = useState('3000');
   const [openingBilling, setOpeningBilling] = useState(false);
   const [locallyDeleted, setLocallyDeleted] = useState(false);
+  const [showN8nDeleteConfirm, setShowN8nDeleteConfirm] = useState(false);
+  const [n8nDeleting, setN8nDeleting] = useState(false);
+  const [n8nDeleteError, setN8nDeleteError] = useState<string | null>(null);
 
   // When fake status block expires, reload to show real hosting status
   // Handles blocks that exist at mount time (e.g., after deploy or page reload during action)
@@ -1769,6 +1770,29 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
     await Promise.all([refetchInstances(), refetchLocal()]);
     router.push('/portal/hosting');
   }, [refetchInstances, refetchLocal, router]);
+
+  const handleN8nDelete = async () => {
+    if (!session?.access_token) return;
+    setN8nDeleting(true);
+    setN8nDeleteError(null);
+    try {
+      const res = await fetch(`/api/flowengine/instances/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setN8nDeleteError(data.error || data.message || 'Failed to delete instance');
+        setN8nDeleting(false);
+        return;
+      }
+      try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
+      await handleFlowEngineDeleted();
+    } catch {
+      setN8nDeleteError('Delete failed. Please try again.');
+      setN8nDeleting(false);
+    }
+  };
 
   const instance = instances.find(i => i.id === id);
 
@@ -1877,7 +1901,51 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
   if (!isPending) {
     return (
       <div className="flex-1 overflow-y-auto">
-        <N8nAccountPage embedded focusInstanceId={id} onInstanceDeleted={handleInstanceDeleted} />
+        <N8nAccountPage embedded focusInstanceId={id} onInstanceDeleted={handleInstanceDeleted} liveStatus={liveStatus[id]} />
+
+        {/* Danger zone — only for owners */}
+        {instance?.access === 'owner' && (
+          <div className="max-w-2xl mx-auto px-4 pb-6">
+            <div className="bg-gray-900/50 border border-red-800 rounded-lg p-5">
+              <p className="text-sm font-medium text-white mb-1">Danger Zone</p>
+              <p className="text-sm text-white/60 mb-4">Permanently delete this instance and cancel the subscription.</p>
+              {!showN8nDeleteConfirm ? (
+                <button
+                  onClick={() => setShowN8nDeleteConfirm(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-red-900/20 text-red-400 border border-red-800 hover:bg-red-900/30 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete Instance
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-red-400">
+                    This will permanently delete <span className="font-semibold">{instance.instance_name}</span> and cancel the subscription. This cannot be undone.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleN8nDelete}
+                      disabled={n8nDeleting}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                    >
+                      {n8nDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      Yes, Delete
+                    </button>
+                    <button
+                      onClick={() => setShowN8nDeleteConfirm(false)}
+                      disabled={n8nDeleting}
+                      className="px-3 py-2 bg-gray-800 text-white/60 hover:text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  {n8nDeleteError && <p className="text-sm text-red-400">{n8nDeleteError}</p>}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {instance?.stripe_subscription_id && (
           <div className="max-w-4xl mx-auto px-6 pb-6 flex justify-center">
             <button
