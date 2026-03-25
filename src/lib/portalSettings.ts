@@ -80,12 +80,14 @@ export async function getPortalSettings(): Promise<PortalSettings> {
       .single();
 
     const settings: Record<string, any> = {};
+    const oauthCreds: Record<string, any> = data?.oauth_credentials || {};
 
     for (const [key, envVar] of Object.entries(ENV_FALLBACKS)) {
-      // DB value takes precedence over env var
+      // DB column → oauth_credentials fallback (for installs missing the column) → env var
       const dbValue = data?.[key];
+      const jsonbValue = oauthCreds[key];
       const envValue = process.env[envVar];
-      settings[key] = dbValue ?? envValue ?? null;
+      settings[key] = dbValue ?? jsonbValue ?? envValue ?? null;
     }
 
     // Apply defaults for non-nullable fields
