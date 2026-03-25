@@ -22,6 +22,8 @@ export async function GET(req: NextRequest) {
     const user = await authenticate(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    // Always read fresh from DB — avoids stale module-level cache in serverless workers
+    invalidateSettingsCache();
     const settings = await getPortalSettings();
     const apiKey = settings.flowengine_api_key;
 

@@ -52,6 +52,7 @@ export function usePortalInstances() {
     // Use ownerId for queries — if team member, fetches owner's data
     const effectiveId = ownerId;
 
+    try {
     const [payPerResult, membershipResult, clientResult] = await Promise.all([
       // Instances owned/managed by effective owner
       // Include deleted instances (deleted_at set) — they still have active subscriptions and can be redeployed
@@ -134,16 +135,27 @@ export function usePortalInstances() {
         };
       });
 
-    let merged = [...payPer, ...membership, ...clientAccess];
+    const localMerged = [...payPer, ...membership, ...clientAccess];
 
-    // Merge FlowEngine-hosted instances
-    try {
-      const { data: { session: authSession } } = await supabase.auth.getSession();
-      if (authSession?.access_token) {
-        const feRes = await fetch('/api/flowengine/instances', {
-          headers: { Authorization: `Bearer ${authSession.access_token}` },
-        });
-        if (feRes.ok) {
+    // Show local instances immediately — don't block on FlowEngine API
+    setInstances(localMerged);
+    setCache(localMerged);
+    setLoading(false);
+
+    // Merge FlowEngine-hosted instances in the background (non-blocking)
+    supabase.auth.getSession().then(({ data: { session: authSession } }) => {
+      if (!authSession?.access_token) return;
+      fetch('/api/flowengine/instances', {
+        headers: { Authorization: `Bearer ${authSession.access_token}` },
+      })
+        .then(async (feRes) => {
+          if (!feRes.ok) {
+            const errData = await feRes.json().catch(() => ({}));
+            const msg = errData.error || errData.message || `FlowEngine API error (${feRes.status})`;
+            console.warn('[usePortalInstances] FlowEngine fetch failed:', msg);
+            setFlowEngineError(msg);
+            return;
+          }
           setFlowEngineError(null);
           const feData = await feRes.json();
 
@@ -151,44 +163,38 @@ export function usePortalInstances() {
           const feManagedInstances: any[] = (feData.instances || []).filter((i: any) => !i.is_external);
           const feNameSet = new Set<string>(feManagedInstances.map((i: any) => i.instance_name));
 
-          // Remove any locally-connected (is_external: true) entries whose names
-          // now match a FlowEngine-managed instance — FlowEngine is authoritative
-          merged = merged.filter(i => !i.is_external || !feNameSet.has(i.instance_name));
-
-          // Skip instances already present as locally-managed (non-external)
-          const localManagedNames = new Set(merged.filter(i => !i.is_external).map(i => i.instance_name));
-
-          const feInstances: PortalInstance[] = feManagedInstances
-            .filter((i: any) => !localManagedNames.has(i.instance_name))
-            .map((i: any) => ({
-              id: i.id,
-              instance_name: i.instance_name,
-              instance_url: i.instance_url,
-              status: i.status,
-              storage_limit_gb: i.storage_gb,
-              created_at: i.created_at,
-              source: 'pay_per_instance' as const,
-              is_external: false,
-              access: 'owner' as const,
-              service_type: (i.service_type || 'n8n') as PortalInstance['service_type'],
-              platform: 'flowengine' as const,
-            }));
-          merged.push(...feInstances);
-        } else {
-          const errData = await feRes.json().catch(() => ({}));
-          const msg = errData.error || errData.message || `FlowEngine API error (${feRes.status})`;
-          console.warn('[usePortalInstances] FlowEngine fetch failed:', msg);
-          setFlowEngineError(msg);
-        }
-      }
+          setInstances(prev => {
+            let merged = prev.filter(i => !i.is_external || !feNameSet.has(i.instance_name));
+            const localManagedNames = new Set(merged.filter(i => !i.is_external).map(i => i.instance_name));
+            const feInstances: PortalInstance[] = feManagedInstances
+              .filter((i: any) => !localManagedNames.has(i.instance_name))
+              .map((i: any) => ({
+                id: i.id,
+                instance_name: i.instance_name,
+                instance_url: i.instance_url,
+                status: i.status,
+                storage_limit_gb: i.storage_gb,
+                created_at: i.created_at,
+                source: 'pay_per_instance' as const,
+                is_external: false,
+                access: 'owner' as const,
+                service_type: (i.service_type || 'n8n') as PortalInstance['service_type'],
+                platform: 'flowengine' as const,
+              }));
+            const final = [...merged, ...feInstances];
+            setCache(final);
+            return final;
+          });
+        })
+        .catch((err) => {
+          console.warn('[usePortalInstances] FlowEngine unreachable:', err);
+          setFlowEngineError('FlowEngine unreachable');
+        });
+    });
     } catch (err) {
-      console.warn('[usePortalInstances] FlowEngine unreachable:', err);
-      setFlowEngineError('FlowEngine unreachable');
+      console.error('[usePortalInstances] fetch failed:', err);
+      setLoading(false);
     }
-
-    setInstances(merged);
-    setCache(merged);
-    setLoading(false);
   }, [user, ownerId]);
 
   useEffect(() => {

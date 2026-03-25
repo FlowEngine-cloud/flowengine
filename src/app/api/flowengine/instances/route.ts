@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getPortalSettings } from '@/lib/portalSettings';
+import { getPortalSettings, invalidateSettingsCache } from '@/lib/portalSettings';
 import { createFlowEngineClient, FlowEngineApiError } from '@/lib/flowengine';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { verifyFlowEngineAccess } from '@/lib/flowengineAccess';
@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
     const { authorized } = await verifyFlowEngineAccess(supabaseAdmin, user.id);
     if (!authorized) return NextResponse.json({ error: 'Access denied' }, { status: 403 });
 
+    invalidateSettingsCache();
     const settings = await getPortalSettings();
     const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
     if (!client) {
@@ -102,6 +103,7 @@ export async function GET(req: NextRequest) {
     const { authorized } = await verifyFlowEngineAccess(supabaseAdmin, user.id);
     if (!authorized) return NextResponse.json({ error: 'Access denied' }, { status: 403 });
 
+    invalidateSettingsCache();
     const settings = await getPortalSettings();
     const client = createFlowEngineClient(settings.flowengine_api_key ?? undefined);
     if (!client) {
