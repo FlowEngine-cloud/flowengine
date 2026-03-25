@@ -7,14 +7,14 @@ import { usePortalRoleContext } from '@/app/portal/context';
 import { usePortalInstances } from '@/components/portal/usePortalInstances';
 import SecondaryPanel, { SecondaryPanelSection } from '@/components/portal/SecondaryPanel';
 import SearchableSelect from '@/components/ui/SearchableSelect';
-import { Plus, ExternalLink, Server, Globe, Link2, AlertTriangle, Cloud } from 'lucide-react';
+import { Plus, ExternalLink, Server, Globe, Link2, Cloud } from 'lucide-react';
 import DeployInstanceModal, { InstanceConfig, ConnectInstanceConfig } from '@/components/DeployInstanceModal';
 import { HostingContext } from './context';
 
 export default function HostingLayout({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
   const { role, allowFullAccess, loading: roleLoading } = usePortalRoleContext();
-  const { instances, loading, flowEngineError, refetch: refetchInstances } = usePortalInstances();
+  const { instances, loading, refetch: refetchInstances } = usePortalInstances();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -408,17 +408,7 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
           </div>
         )}
 
-        {/* FlowEngine connection error banner */}
-        {flowEngineError && flowEngineError !== 'FlowEngine unreachable' && (
-          <div className="flex-shrink-0 border-b border-yellow-800/50 bg-yellow-900/10 px-6 py-2.5 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0" />
-            <span className="text-sm text-yellow-300">
-              {flowEngineError === 'FlowEngine API key not configured'
-                ? 'FlowEngine API key not configured — go to Settings → Connections to add it.'
-                : `FlowEngine: ${flowEngineError}`}
-            </span>
-          </div>
-        )}
+        {/* FlowEngine is optional — errors are suppressed; instances simply won't appear if key is missing/invalid */}
 
         {/* Content */}
         {showSkeleton ? (
