@@ -38,7 +38,6 @@ export interface PortalSettings {
   n8n_runner_image: string | null;
   // FlowEngine API
   flowengine_api_key: string | null;
-  flowengine_api_url: string | null;
   // General
   admin_email: string | null;
 }
@@ -60,7 +59,6 @@ const ENV_FALLBACKS: Record<string, string> = {
   n8n_runners_enabled: 'N8N_RUNNERS_ENABLED',
   n8n_runner_image: 'N8N_RUNNER_IMAGE',
   flowengine_api_key: 'FLOWENGINE_API_KEY',
-  flowengine_api_url: 'FLOWENGINE_API_URL',
   admin_email: 'ADMIN_EMAIL',
 };
 

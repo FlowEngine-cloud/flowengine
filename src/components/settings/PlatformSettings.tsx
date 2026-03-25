@@ -21,7 +21,6 @@ interface PlatformConfig {
   ai_api_key: string;
   // FlowEngine
   flowengine_api_key: string;
-  flowengine_api_url: string;
 }
 
 type SectionKey = 'ai' | 'flowengine';
@@ -30,12 +29,11 @@ const DEFAULT_CONFIG: PlatformConfig = {
   ai_base_url: '',
   ai_api_key: '',
   flowengine_api_key: '',
-  flowengine_api_url: '',
 };
 
 const SECTION_FIELDS: Record<SectionKey, (keyof PlatformConfig)[]> = {
   ai: ['ai_base_url', 'ai_api_key'],
-  flowengine: ['flowengine_api_url', 'flowengine_api_key'],
+  flowengine: ['flowengine_api_key'],
 };
 
 const SECRET_FIELDS: Set<keyof PlatformConfig> = new Set([
@@ -149,7 +147,6 @@ export function PlatformSettings() {
         },
         body: JSON.stringify({
           ...(hasLiveKey ? { apiKey: formKey } : {}),
-          ...(config.flowengine_api_url ? { apiUrl: config.flowengine_api_url } : {}),
         }),
       });
       const data = await res.json();
@@ -171,7 +168,7 @@ export function PlatformSettings() {
   };
 
   const updateField = (field: keyof PlatformConfig, value: string | boolean) => {
-    if (field === 'flowengine_api_key' || field === 'flowengine_api_url') setFeConnectionStatus(null);
+    if (field === 'flowengine_api_key') setFeConnectionStatus(null);
     setConfig((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -325,7 +322,6 @@ export function PlatformSettings() {
             FlowEngine API configuration for managed hosting and platform services.
           </p>
           <div className="space-y-4">
-            {renderTextField('flowengine_api_url', 'API URL', 'https://flowengine.cloud')}
             {renderTextField('flowengine_api_key', 'API Key', 'fe_...', true)}
             {renderMessage('flowengine')}
             <div className="flex justify-end gap-3">
