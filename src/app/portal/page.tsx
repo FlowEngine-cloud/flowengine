@@ -43,7 +43,6 @@ import AddCredentialModal from '@/components/credentials/AddCredentialModal';
 import WorkflowList from '@/components/workflows/WorkflowList';
 import ExecutionDataViewer from '@/components/ExecutionDataViewer';
 import { ClientPanelContent } from './[id]/content';
-import { OPENCLAW_TABS_LIST } from './[id]/openclaw-content';
 import { WebsitePortalContent } from './[id]/website-content';
 
 
@@ -774,23 +773,8 @@ function PortalPageContent() {
                 // Show tabs for the selected instance — n8n vs OpenClaw vs Docker
                 const selectedInst = activePortalInstances.find(i => i.id === instanceFilter);
                 const st = selectedInst?.service_type;
-                const isOpenClaw = st === 'openclaw';
-                const isDocker = st === 'website';
-                if (isOpenClaw) {
-                  sections.push({
-                    title: '',
-                    items: OPENCLAW_TABS_LIST.map((tab) => ({
-                      id: tab.id,
-                      label: tab.label,
-                      icon: <tab.icon className="w-4 h-4" />,
-                    })),
-                  });
-                } else if (isDocker) {
-                  sections.push({
-                    title: '',
-                    items: [{ id: 'overview', label: 'Overview', icon: <PanelsTopLeft className="w-4 h-4" /> }],
-                  });
-                } else {
+                // n8n gets full tab nav; all other types (openclaw, website, other) have no sub-tabs
+                if (!st || st === 'n8n') {
                   sections.push({
                     title: '',
                     items: INSTANCE_TABS.map((tab) => ({
