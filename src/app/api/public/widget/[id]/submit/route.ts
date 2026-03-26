@@ -81,15 +81,19 @@ export async function POST(
     }
 
     // Validate webhook URL still points to the correct instance
-    if (instance.instance_url) {
-      const webhookValidation = isValidWebhookUrl(widget.webhook_url, instance.instance_url);
-      if (!webhookValidation.valid) {
-        console.error('Public widget webhook validation failed:', id);
-        return NextResponse.json(
-          { error: 'this component needs to be reconfigured. Please contact the site owner.' },
-          { status: 500 }
-        );
-      }
+    if (!instance.instance_url) {
+      return NextResponse.json(
+        { error: 'this component needs to be reconfigured. Please contact the site owner.' },
+        { status: 500 }
+      );
+    }
+    const webhookValidation = isValidWebhookUrl(widget.webhook_url, instance.instance_url);
+    if (!webhookValidation.valid) {
+      console.error('Public widget webhook validation failed:', id);
+      return NextResponse.json(
+        { error: 'this component needs to be reconfigured. Please contact the site owner.' },
+        { status: 500 }
+      );
     }
 
     // Get form data from request
