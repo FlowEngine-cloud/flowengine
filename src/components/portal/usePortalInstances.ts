@@ -136,9 +136,13 @@ export function usePortalInstances() {
       });
 
     const localMerged = [...payPer, ...membership, ...clientAccess];
+    const localIds = new Set(localMerged.map(i => i.id));
 
-    // Show local instances immediately — don't block on FlowEngine API
-    setInstances(localMerged);
+    // Show local instances immediately — preserve any cached FE instances to avoid flicker
+    setInstances(prev => {
+      const keptFe = prev.filter(i => (i as any).platform === 'flowengine' && !localIds.has(i.id));
+      return [...localMerged, ...keptFe];
+    });
     setCache(localMerged);
     setLoading(false);
 
