@@ -2,7 +2,9 @@
 
 An open-source client portal for automation agencies. Give your clients a white-labeled dashboard to access their n8n workflows, chatbots, and widgets — without touching n8n directly.
 
-**[Live Demo →](https://demo.flowengine.cloud)** &nbsp;|&nbsp; **[Watch the video →](https://www.youtube.com/watch?v=LbVA6NYQqG4)**
+**Demo:** https://demo.flowengine.cloud
+
+[![Watch the demo](https://img.youtube.com/vi/LbVA6NYQqG4/maxresdefault.jpg)](https://www.youtube.com/watch?v=LbVA6NYQqG4)
 
 ## What It Does
 
@@ -68,8 +70,8 @@ Configure the portal itself:
 Everything runs in one stack — no external Supabase account needed.
 
 ```bash
-git clone https://github.com/FlowEngine-cloud/FlowEngne.git
-cd FlowEngne
+git clone https://github.com/FlowEngine-cloud/flowengine.git
+cd flowengine
 ./setup.sh
 ```
 
@@ -89,11 +91,11 @@ Set `PORTAL_DOMAIN=portal.yourdomain.com` in `.env` for automatic HTTPS via Let'
 
 ### Option 2: Pre-built Docker image (recommended for production)
 
-Uses the image published to `ghcr.io/flowengine-cloud/flowengne` — no build step, faster setup.
+Uses the image published to `ghcr.io/flowengine-cloud/flowengine` — no build step, faster setup.
 
 ```bash
-git clone https://github.com/FlowEngine-cloud/FlowEngne.git
-cd FlowEngne
+git clone https://github.com/FlowEngine-cloud/flowengine.git
+cd flowengine
 ./setup.sh --prod
 ```
 
@@ -111,14 +113,14 @@ docker compose -f docker-compose.prod.yml pull portal
 docker compose -f docker-compose.prod.yml up -d portal
 ```
 
-To pin a specific version, set `IMAGE_TAG=v1.2.3` in your `.env`.
+To pin a specific version, set `IMAGE_TAG=v0.1.0` in your `.env`.
 
 ---
 
 ### Option 3: Coolify
 
 1. In Coolify, create a new **Docker Compose** service
-2. Source: **GitHub** → `FlowEngine-cloud/FlowEngne`
+2. Source: **GitHub** → `FlowEngine-cloud/flowengine`
 3. Compose file: `docker-compose.prod.yml`
 4. Add your environment variables from `.env.docker`
 5. Deploy
@@ -135,8 +137,8 @@ Coolify will automatically redeploy when the `latest` image is updated (set **Wa
 curl -fsSL https://get.docker.com | sh
 
 # 3. Clone and configure
-git clone https://github.com/FlowEngine-cloud/FlowEngne.git
-cd FlowEngne
+git clone https://github.com/FlowEngine-cloud/flowengine.git
+cd flowengine
 ./setup.sh --prod
 
 # 4. Edit .env, then start

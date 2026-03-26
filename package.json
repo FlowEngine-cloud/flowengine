@@ -1,5 +1,5 @@
 {
-  "name": "flowengine-portal",
+  "name": "flowengine",
   "version": "0.1.0",
   "description": "Open-source client portal for automation agencies. Manage teams, invite clients, build templates, connect your own n8n.",
   "private": true,

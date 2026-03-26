@@ -2,7 +2,7 @@
 # Uses pre-built images from GitHub Container Registry (no local build needed)
 #
 # Quick start:
-#   1. git clone https://github.com/FlowEngine-cloud/FlowEngne.git && cd FlowEngne
+#   1. git clone https://github.com/FlowEngine-cloud/flowengine.git && cd FlowEngne
 #   2. cp .env.docker .env   ← then edit .env with your domain/secrets
 #   3. docker compose -f docker-compose.prod.yml up -d
 #
@@ -203,7 +203,7 @@ services:
   # To pin a version: set IMAGE_TAG=v1.2.3 in your .env
   # ============================================
   portal:
-    image: ghcr.io/flowengine-cloud/flowengne:${IMAGE_TAG:-latest}
+    image: ghcr.io/flowengine-cloud/flowengine:${IMAGE_TAG:-latest}
     environment:
       NEXT_PUBLIC_SUPABASE_URL: ${SITE_URL:-http://localhost:3000}
       SUPABASE_URL: http://kong:8000
