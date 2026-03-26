@@ -2,6 +2,8 @@
 
 An open-source client portal for automation agencies. Give your clients a white-labeled dashboard to access their n8n workflows, chatbots, and widgets — without touching n8n directly.
 
+**[Live Demo →](https://demo.flowengine.cloud)** &nbsp;|&nbsp; **[Watch the video →](https://www.youtube.com/watch?v=LbVA6NYQqG4)**
+
 ## What It Does
 
 You run this portal. Your clients log in and see only what you give them access to. You manage everything from behind the scenes.

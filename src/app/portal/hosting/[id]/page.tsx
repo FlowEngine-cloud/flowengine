@@ -8,7 +8,7 @@
 import { use, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthContext';
-import { usePortalInstances, PortalInstance } from '@/components/portal/usePortalInstances';
+import { PortalInstance } from '@/components/portal/usePortalInstances';
 import N8nAccountPage from '@/app/n8n-account/page';
 import { useHostingContext } from '../context';
 import { Server, Loader2, ChevronRight, ExternalLink, Play, Square, RotateCcw, Trash2, Globe, RefreshCw, Terminal, History, Pencil, Check, X, Link2, Users, Plus, Cloud } from 'lucide-react';
@@ -1173,8 +1173,8 @@ export default function HostingDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const { session } = useAuth();
   const router = useRouter();
-  const { refetchInstances, liveStatus } = useHostingContext();
-  const { instances, loading: instancesLoading, refetch: refetchLocal } = usePortalInstances();
+  const { instances, instancesLoading, refetchInstances, liveStatus } = useHostingContext();
+  const refetchLocal = refetchInstances;
 
   const [selectedService, setSelectedService] = useState<ServiceType | null>(null);
   const [deploying, setDeploying] = useState(false);

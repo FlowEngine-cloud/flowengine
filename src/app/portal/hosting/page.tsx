@@ -2,9 +2,9 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { usePortalInstances, PortalInstance } from '@/components/portal/usePortalInstances';
+import { PortalInstance } from '@/components/portal/usePortalInstances';
 import { useAuth } from '@/components/AuthContext';
-import { Server, ExternalLink, Loader2, Plus, Globe, CreditCard, Link2, Cloud } from 'lucide-react';
+import { Server, ExternalLink, Loader2, Plus, Globe, CreditCard, Link2 } from 'lucide-react';
 import { useHostingContext } from './context';
 
 // ─── Service icons (module-level, stable references) ─────────────────────────
@@ -39,8 +39,7 @@ function sectionIcon(key: string) {
 }
 
 export default function HostingPage() {
-  const { instances, loading } = usePortalInstances();
-  const { liveStatus, openDeployModal } = useHostingContext();
+  const { instances, instancesLoading: loading, liveStatus, openDeployModal } = useHostingContext();
   const { session } = useAuth();
   const router = useRouter();
   const [loadingPortal, setLoadingPortal] = useState<string | null>(null);
@@ -175,22 +174,18 @@ export default function HostingPage() {
 
   // Hide only soft-deleted external instances; active external ones show in their service type section
   const managed = instances.filter(i => !(i.is_external && i.deleted_at));
-  // FlowEngine Cloud instances — separate group
-  const flowEngineInstances = managed.filter(i => i.platform === 'flowengine' && !i.deleted_at && i.status !== 'pending_deploy');
-  // Local / self-hosted instances
-  const notDeployed = managed.filter(i => i.platform !== 'flowengine' && (!i.service_type || i.deleted_at || i.status === 'pending_deploy'));
-  const n8nInstances = managed.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy' && i.platform !== 'flowengine');
-  const openclawInstances = managed.filter(i => i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy' && i.platform !== 'flowengine');
-  const websiteInstances = managed.filter(i => i.service_type === 'website' && !i.deleted_at && i.status !== 'pending_deploy' && i.platform !== 'flowengine');
-  const otherInstances = managed.filter(i => i.service_type === 'other' && !i.deleted_at && i.status !== 'pending_deploy' && i.platform !== 'flowengine');
+  const notDeployed = managed.filter(i => !i.service_type || i.deleted_at || i.status === 'pending_deploy');
+  const n8nInstances = managed.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy');
+  const openclawInstances = managed.filter(i => i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy');
+  const websiteInstances = managed.filter(i => i.service_type === 'website' && !i.deleted_at && i.status !== 'pending_deploy');
+  const otherInstances = managed.filter(i => i.service_type === 'other' && !i.deleted_at && i.status !== 'pending_deploy');
 
   const sections: Array<{ key: string; title: string; items: typeof managed; icon?: React.ReactNode }> = [
-    { key: 'flowengine',   title: 'FlowEngine Cloud', items: flowEngineInstances, icon: <Cloud className="w-4 h-4" /> },
-    { key: 'n8n',          title: 'n8n',              items: n8nInstances },
-    { key: 'openclaw',     title: 'OpenClaw',         items: openclawInstances },
-    { key: 'website',      title: 'Website',          items: websiteInstances },
-    { key: 'other',        title: 'External',         items: otherInstances },
-    { key: 'not-deployed', title: 'Not deployed',     items: notDeployed },
+    { key: 'n8n',          title: 'n8n',          items: n8nInstances },
+    { key: 'openclaw',     title: 'OpenClaw',     items: openclawInstances },
+    { key: 'website',      title: 'Website',      items: websiteInstances },
+    { key: 'other',        title: 'External',     items: otherInstances },
+    { key: 'not-deployed', title: 'Not deployed', items: notDeployed },
   ].filter(s => s.items.length > 0);
 
   return (

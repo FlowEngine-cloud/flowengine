@@ -768,6 +768,23 @@ function PortalPageContent() {
         ) : (
           <SecondaryPanel
             sections={(() => {
+              // In manage mode: show only the relevant tabs for this instance
+              if (instanceFilter !== 'all') {
+                const selInst = activePortalInstances.find(i => i.id === instanceFilter);
+                const st = selInst?.service_type;
+                if (!st || st === 'n8n') {
+                  return [{
+                    title: '',
+                    items: INSTANCE_TABS.map((tab) => ({
+                      id: tab.id,
+                      label: tab.label,
+                      icon: <tab.icon className="w-4 h-4" />,
+                    })),
+                  }];
+                }
+                return [];
+              }
+
               const sections: SecondaryPanelSection[] = [];
               const portalManaged = emailFilteredInstances;
               const sorted = [...portalManaged].sort((a, b) => a.instance_name.localeCompare(b.instance_name));
@@ -797,44 +814,22 @@ function PortalPageContent() {
               if (externalInsts.length > 0) sections.push({ title: 'External', icon: <Link2 className="w-3.5 h-3.5 text-white/60" />, items: externalInsts.map(mapInst) });
               if (pendingInsts.length > 0) sections.push({ title: 'Not deployed', icon: <Server className="w-3.5 h-3.5" />, items: pendingInsts.map(mapInst) });
 
-              // In manage mode, also show n8n tabs below the instance groups
-              if (instanceFilter !== 'all') {
-                const selectedInst = activePortalInstances.find(i => i.id === instanceFilter);
-                const st = selectedInst?.service_type;
-                if (!st || st === 'n8n') {
-                  sections.push({
-                    title: '',
-                    items: INSTANCE_TABS.map((tab) => ({
-                      id: tab.id,
-                      label: tab.label,
-                      icon: <tab.icon className="w-4 h-4" />,
-                    })),
-                  });
-                }
-              }
-
               return sections;
             })()}
-            selectedId={instanceFilter !== 'all' ? instanceFilter : undefined}
+            selectedId={instanceFilter !== 'all' ? activePortalTab : undefined}
             onSelect={(id) => {
               if (instanceFilter !== 'all') {
-                const isTab = INSTANCE_TABS.some(t => t.id === id);
-                if (isTab) {
-                  if (id === 'overview') {
-                    setInstanceFilterState('all');
-                    setActivePortalTab('overview');
-                    window.history.replaceState(null, '', '/portal');
-                    return;
-                  }
-                  setActivePortalTab(id);
-                  const params = new URLSearchParams(window.location.search);
-                  params.set('instance', instanceFilter);
-                  params.set('tab', id);
-                  updateUrl(params);
-                } else {
-                  // Navigate to a different instance
-                  setInstanceFilter(id);
+                if (id === 'overview') {
+                  setInstanceFilterState('all');
+                  setActivePortalTab('overview');
+                  window.history.replaceState(null, '', '/portal');
+                  return;
                 }
+                setActivePortalTab(id);
+                const params = new URLSearchParams(window.location.search);
+                params.set('instance', instanceFilter);
+                params.set('tab', id);
+                updateUrl(params);
               } else {
                 setInstanceFilter(id);
               }
