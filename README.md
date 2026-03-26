@@ -222,4 +222,4 @@ The portal works with any self-hosted n8n. Optionally, you can connect to [FlowE
 
 ## License
 
-MIT with Commons Clause - free to self-host, for your own usage not for resale as a hosted service.
+MIT with Commons Clause and Additional Restrictions — free to self-host for personal or internal business use. Commercial embedding, component extraction, resale, and competing managed services are prohibited. See [LICENSE](./LICENSE) for full terms or contact hello@flowengine.cloud for commercial licensing.

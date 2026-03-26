@@ -24,7 +24,7 @@ SOFTWARE.
 Commons Clause License Condition v1.0
 
 The Software is provided to you by the Licensor under the License, as defined
-below, subject to the following condition.
+below, subject to the following conditions.
 
 Without limiting other conditions in the License, the grant of rights under
 the License will not include, and the License does not grant to you, the right
@@ -38,6 +38,38 @@ whose value derives, entirely or substantially, from the functionality of the
 Software. Any license notice or attribution required by the License must also
 include this Commons Clause License Condition notice.
 
+Additional Restrictions
+
+The following additional restrictions apply to all use of the Software:
+
+1. No Commercial Embedding. You may not incorporate the Software, or any
+   substantial portion of the Software, into another product or service that
+   is sold, licensed, or otherwise monetized. This includes white-labeling,
+   rebranding, or wrapping the Software in a way that obscures its origin
+   while deriving commercial value from its functionality.
+
+2. No Extraction of Components. You may not extract, isolate, or repurpose
+   specific features, modules, algorithms, or code patterns from the Software
+   — including but not limited to credential injection, OAuth flows, workflow
+   embedding, or template distribution — for use in a competing or commercial
+   product or service, regardless of the degree of modification applied.
+
+3. No Resale of Modifications. You may not sell, license, or commercially
+   distribute modified versions of the Software or derivative works based on
+   the Software, whether standalone or as part of a larger product.
+
+4. No Competing Managed Services. You may not use the Software, in whole or
+   in part, to operate a managed service, hosted platform, or SaaS offering
+   that competes with or replicates the commercial offerings of the Licensor.
+
+5. Attribution Required. Any permitted redistribution of the Software must
+   retain all original copyright notices, this license in its entirety, and
+   a clear attribution to FlowEngine (https://flowengine.cloud) in any
+   user-facing documentation or interface.
+
+For commercial licensing, embedding rights, or OEM use, contact:
+hello@flowengine.cloud
+
 Software: FlowEngine Portal
-License: MIT
+License: MIT with Commons Clause and Additional Restrictions
 Licensor: FlowEngine
