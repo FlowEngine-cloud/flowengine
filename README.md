@@ -17,15 +17,20 @@ You run the portal. Your clients log in and see only what you give them access t
 ## Portal Tabs
 
 ### Manage
-Your main workspace. Connect to an n8n instance and control everything from one place:
-- Browse and trigger workflows
-- View and manage credentials
-- See active executions and logs
-- Manage WhatsApp sessions (if connected via Evolution API)
-- Build and publish UI embeds
+Built mainly for n8n. This is what your clients see — the hosting layer is hidden unless you choose to expose it.
+
+**Overview** - see detailed executions across all your clients at once, with filters by workflow, status, and client.
+
+**UI Embeds** - build embeddable chatbots, forms, and UI elements and link them to n8n workflows in one click. FlowEngine automatically picks up the webhook and trigger type.
+
+**Templates** - set up once, your clients can browse and import workflows based on descriptions and see exactly what credentials they need. You can push updates that let clients update live workflows in one click, or push to all your clients at once.
+
+**Credentials** - clients add their API keys directly through the portal and they go straight into their n8n instance. Set up OAuth apps once under Settings (Microsoft, Google, Slack, X, Reddit, LinkedIn) and your clients authenticate through the portal — their tokens are sent directly to their n8n.
+
+For OpenClaw and Docker instances, basic management is available (status, URL, restart).
 
 ### Hosting
-Deploy and manage instances. Supports:
+Deploy and manage instances. The hosting tab is yours — clients don't see it by default.
 - **n8n** - connect your own self-hosted instance or deploy via FlowEngine managed hosting
 - **OpenClaw** - multi-channel bot platform (Telegram, Discord, Slack) - requires 30GB+ storage
 - **Docker / Website** - deploy any Docker image or static site
@@ -34,7 +39,7 @@ Deploy and manage instances. Supports:
 Each instance shows live status, URL, and service type. Deleted instances stay visible so subscriptions can be managed and redeployed.
 
 ### Services
-Connect third-party integrations and external services to your portal.
+Link a WhatsApp API to your clients' instances.
 
 ### Clients
 Invite clients and control what they see:
@@ -43,24 +48,13 @@ Invite clients and control what they see:
 - Clients get their own login and see only their assigned instances
 - Full-access or read-only depending on your settings
 
-### Templates
-A library of n8n workflow templates. Browse, preview, and deploy directly to connected instances. Supports importing from URL or uploading JSON.
-
-### UI Studio
-Build embeddable UI without writing code:
-- Chatbots connected to n8n workflows
-- Forms that trigger automations
-- Custom UI elements
-- Preview and copy embed code
-- Publish as standalone pages or iframe UI embeds
-
 ### Settings
-Configure the portal itself:
 - **Branding** - logo, colors, custom name
 - **Authentication** - Google/GitHub OAuth, signup restrictions
 - **SMTP** - email for client invitations
 - **Stripe** - connect your Stripe account to bill clients
-- **FlowEngine API** - connect to managed hosting (optional)
+- **OAuth apps** - configure Microsoft, Google, Slack, X, Reddit, LinkedIn once for all clients
+- **AI usage** - when hosting with FlowEngine, manage client AI usage and choose who pays for it
 - **Team** - invite team members with role-based access
 
 ---
