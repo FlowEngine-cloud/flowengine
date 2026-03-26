@@ -256,7 +256,7 @@ function isSafeImageUrl(url: string | null | undefined): boolean {
  * When embedded=true, background effects, preview banner, and header are hidden
  * so it fits cleanly inside the portal three-column layout.
  */
-export function ClientPanelContent({ instanceId, embedded = false, portalEmbedded = false, externalTab, onTabChange, backUrl, isFlowEngine = false, fallbackInstance }: { instanceId: string; embedded?: boolean; portalEmbedded?: boolean; externalTab?: string; onTabChange?: (tab: string) => void; backUrl?: string; isFlowEngine?: boolean; fallbackInstance?: { id: string; instance_name: string; instance_url?: string; status?: string; service_type?: string | null } }) {
+export function ClientPanelContent({ instanceId, embedded = false, portalEmbedded = false, externalTab, onTabChange, backUrl, isFlowEngine = false }: { instanceId: string; embedded?: boolean; portalEmbedded?: boolean; externalTab?: string; onTabChange?: (tab: string) => void; backUrl?: string; isFlowEngine?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { session } = useAuth();
@@ -2272,36 +2272,6 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
 
   // Only show "not found" error after we've actually tried to fetch
   if (initialLoadComplete && !instance) {
-    // In portal embedded mode with fallback data, show basic instance info instead of error
-    if (portalEmbedded && fallbackInstance) {
-      return (
-        <div className="flex flex-col items-center justify-center gap-6 p-8 min-h-[300px]">
-          <div className="w-16 h-16 rounded-2xl bg-gray-800/30 flex items-center justify-center">
-            <Server className="w-8 h-8 text-gray-500" />
-          </div>
-          <div className="text-center">
-            <p className="text-white font-semibold text-lg mb-1">{fallbackInstance.instance_name}</p>
-            {fallbackInstance.instance_url && (
-              <a
-                href={fallbackInstance.instance_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 justify-center"
-              >
-                {fallbackInstance.instance_url.replace('https://', '')}
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            )}
-          </div>
-          <Link
-            href={`/portal/hosting/${fallbackInstance.id}`}
-            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg transition-colors"
-          >
-            Manage Instance
-          </Link>
-        </div>
-      );
-    }
     return (
       <div className="min-h-full bg-black flex items-center justify-center">
         <div className="text-center">

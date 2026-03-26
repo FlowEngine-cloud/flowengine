@@ -32,7 +32,6 @@ import {
   Settings,
   ArrowLeft,
   Globe,
-  ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -45,6 +44,7 @@ import WorkflowList from '@/components/workflows/WorkflowList';
 import ExecutionDataViewer from '@/components/ExecutionDataViewer';
 import { ClientPanelContent } from './[id]/content';
 import { OpenClawContent, OPENCLAW_TABS_LIST } from './[id]/openclaw-content';
+import { WebsitePortalContent } from './[id]/website-content';
 
 
 // =============================================================================
@@ -921,38 +921,12 @@ function PortalPageContent() {
                 const st = selectedInst?.service_type;
                 const isFlowEngine = (selectedInst as any)?.platform === 'flowengine';
                 if (st === 'openclaw') {
-                  return <OpenClawContent key={instanceFilter} instanceId={instanceFilter} externalTab={activePortalTab} onTabChange={setActivePortalTab} fallbackInstance={selectedInst} />;
+                  return <OpenClawContent key={instanceFilter} instanceId={instanceFilter} externalTab={activePortalTab} onTabChange={setActivePortalTab} />;
                 }
                 if (st === 'website' || st === 'other') {
-                  return (
-                    <div key={instanceFilter} className="flex-1 flex flex-col items-center justify-center gap-6 p-8">
-                      <div className="w-16 h-16 rounded-2xl bg-gray-800/30 flex items-center justify-center">
-                        <Globe className="w-8 h-8 text-gray-500" />
-                      </div>
-                      <div className="text-center">
-                        <p className="text-white font-semibold text-lg mb-1">{selectedInst?.instance_name}</p>
-                        {selectedInst?.instance_url && (
-                          <a
-                            href={selectedInst.instance_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 justify-center"
-                          >
-                            {selectedInst.instance_url.replace('https://', '')}
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        )}
-                      </div>
-                      <Link
-                        href={`/portal/hosting/${instanceFilter}`}
-                        className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg transition-colors"
-                      >
-                        Manage Instance
-                      </Link>
-                    </div>
-                  );
+                  return <WebsitePortalContent key={instanceFilter} instanceId={instanceFilter} instanceName={selectedInst?.instance_name ?? instanceFilter} instanceUrl={selectedInst?.instance_url} status={selectedInst?.status} />;
                 }
-                return <ClientPanelContent key={instanceFilter} instanceId={instanceFilter} portalEmbedded externalTab={activePortalTab} onTabChange={setActivePortalTab} isFlowEngine={isFlowEngine} fallbackInstance={selectedInst} />;
+                return <ClientPanelContent key={instanceFilter} instanceId={instanceFilter} portalEmbedded externalTab={activePortalTab} onTabChange={setActivePortalTab} isFlowEngine={isFlowEngine} />;
               })()}
             </div>
           </div>
