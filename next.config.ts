@@ -6,6 +6,7 @@ const supabaseInternalUrl = process.env.SUPABASE_URL || 'http://kong:8000';
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  poweredByHeader: false,
   experimental: {
     optimizePackageImports: [
       'lucide-react',
@@ -51,6 +52,21 @@ const nextConfig: NextConfig = {
       { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
       { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
       { key: 'X-DNS-Prefetch-Control', value: 'on' },
+      // Next.js inline scripts require 'unsafe-inline'; this still blocks external script injection
+      {
+        key: 'Content-Security-Policy',
+        value: [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: blob: https:",
+          "font-src 'self' data:",
+          "connect-src 'self'",
+          "frame-src 'self'",
+          "object-src 'none'",
+          "base-uri 'self'",
+        ].join('; '),
+      },
     ];
 
     return [
@@ -59,11 +75,11 @@ const nextConfig: NextConfig = {
         headers: securityHeaders,
       },
       {
-        // Allow widget pages to be iframed
+        // Allow widget pages to be iframed from any origin
         source: '/w/:path*',
         headers: [
-          ...securityHeaders.filter(h => h.key !== 'X-Frame-Options'),
-          { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+          ...securityHeaders.filter(h => h.key !== 'X-Frame-Options' && h.key !== 'Content-Security-Policy'),
+          { key: 'Content-Security-Policy', value: "frame-ancestors *; default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'" },
         ],
       },
     ];
