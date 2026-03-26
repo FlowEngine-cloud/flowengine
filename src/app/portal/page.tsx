@@ -43,7 +43,7 @@ import AddCredentialModal from '@/components/credentials/AddCredentialModal';
 import WorkflowList from '@/components/workflows/WorkflowList';
 import ExecutionDataViewer from '@/components/ExecutionDataViewer';
 import { ClientPanelContent } from './[id]/content';
-import { OpenClawContent, OPENCLAW_TABS_LIST } from './[id]/openclaw-content';
+import { OPENCLAW_TABS_LIST } from './[id]/openclaw-content';
 import { WebsitePortalContent } from './[id]/website-content';
 
 
@@ -920,10 +920,8 @@ function PortalPageContent() {
                 const selectedInst = activePortalInstances.find(i => i.id === instanceFilter);
                 const st = selectedInst?.service_type;
                 const isFlowEngine = (selectedInst as any)?.platform === 'flowengine';
-                if (st === 'openclaw') {
-                  return <OpenClawContent key={instanceFilter} instanceId={instanceFilter} externalTab={activePortalTab} onTabChange={setActivePortalTab} />;
-                }
-                if (st === 'website' || st === 'other') {
+                // n8n gets the full portal; everything else gets the simple URL + notes panel
+                if (st !== 'n8n' && st !== null && st !== undefined) {
                   return <WebsitePortalContent key={instanceFilter} instanceId={instanceFilter} instanceName={selectedInst?.instance_name ?? instanceFilter} instanceUrl={selectedInst?.instance_url} status={selectedInst?.status} />;
                 }
                 return <ClientPanelContent key={instanceFilter} instanceId={instanceFilter} portalEmbedded externalTab={activePortalTab} onTabChange={setActivePortalTab} isFlowEngine={isFlowEngine} />;
