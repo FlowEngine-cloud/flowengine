@@ -1,0 +1,23 @@
+#cloud-config
+# DigitalOcean 1-Click / User Data script for FlowEngine
+# Installs Docker and launches FlowEngine on first boot.
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - git
+
+runcmd:
+  # Install Docker
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable docker
+  - systemctl start docker
+
+  # Clone FlowEngine
+  - git clone https://github.com/FlowEngine-cloud/FlowEngine.git /opt/flowengine
+  - cd /opt/flowengine && ./setup.sh --prod
+
+  # Start the stack
+  - cd /opt/flowengine && docker compose -f docker-compose.prod.yml up -d

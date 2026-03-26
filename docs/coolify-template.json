@@ -1,0 +1,10 @@
+{
+  "flowengine": {
+    "documentation": "https://github.com/FlowEngine-cloud/FlowEngine",
+    "slogan": "Open-source white-label client portal for automation agencies. Manage n8n instances and deliver them to clients under your own brand.",
+    "compose": "https://raw.githubusercontent.com/FlowEngine-cloud/FlowEngine/main/docker-compose.prod.yml",
+    "tags": ["portal", "n8n", "automation", "white-label", "agency"],
+    "logo": "https://raw.githubusercontent.com/FlowEngine-cloud/FlowEngine/main/public/logo.png",
+    "minVersion": "4.0.0-beta.374"
+  }
+}

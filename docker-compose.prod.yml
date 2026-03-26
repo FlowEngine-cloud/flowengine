@@ -2,7 +2,7 @@
 # Uses pre-built images from GitHub Container Registry (no local build needed)
 #
 # Quick start:
-#   1. git clone https://github.com/FlowEngine-cloud/flowengine.git && cd FlowEngne
+#   1. git clone https://github.com/FlowEngine-cloud/FlowEngine.git && cd FlowEngine
 #   2. cp .env.docker .env   ← then edit .env with your domain/secrets
 #   3. docker compose -f docker-compose.prod.yml up -d
 #
