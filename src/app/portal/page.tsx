@@ -774,8 +774,7 @@ function PortalPageContent() {
                 // Show tabs for the selected instance — n8n vs OpenClaw vs Docker
                 const selectedInst = activePortalInstances.find(i => i.id === instanceFilter);
                 const st = selectedInst?.service_type;
-                const isFlowEngineInst = (selectedInst as any)?.platform === 'flowengine';
-                const isOpenClaw = !isFlowEngineInst && st === 'openclaw';
+                const isOpenClaw = st === 'openclaw';
                 const isDocker = st === 'website';
                 if (isOpenClaw) {
                   sections.push({
@@ -921,7 +920,7 @@ function PortalPageContent() {
                 const selectedInst = activePortalInstances.find(i => i.id === instanceFilter);
                 const st = selectedInst?.service_type;
                 const isFlowEngine = (selectedInst as any)?.platform === 'flowengine';
-                if (!isFlowEngine && st === 'openclaw') {
+                if (st === 'openclaw') {
                   return <OpenClawContent key={instanceFilter} instanceId={instanceFilter} externalTab={activePortalTab} onTabChange={setActivePortalTab} />;
                 }
                 if (st === 'website') {
