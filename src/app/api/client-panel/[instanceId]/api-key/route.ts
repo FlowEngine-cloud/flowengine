@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isValidUUID, isExternalUrl, checkRateLimit } from '@/lib/validation';
 import { resolveEffectiveUserId } from '@/lib/teamAccess';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { encryptApiKey } from '@/lib/encryption';
 
 
 // POST: Save n8n API key for an instance
@@ -83,9 +84,8 @@ export async function POST(
       }
     }
 
-    // Build update object with API key - PLAINTEXT (encryption disabled)
     const updateData: { n8n_api_key: string | null; instance_url?: string } = {
-      n8n_api_key: apiKey,
+      n8n_api_key: encryptApiKey(apiKey),
     };
 
     // If external URL provided, use it instead of hosted URL

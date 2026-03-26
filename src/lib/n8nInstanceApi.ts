@@ -59,8 +59,7 @@ export function n8nFetch<T = any>(options: N8nFetchOptions): Promise<N8nFetchRes
         'Content-Type': 'application/json',
       },
       timeout,
-      // Allow self-signed certificates for HTTPS
-      rejectUnauthorized: false,
+      rejectUnauthorized: process.env.N8N_ALLOW_SELF_SIGNED === 'true' ? false : true,
     };
 
     const req = lib.request(requestOptions, (res) => {
