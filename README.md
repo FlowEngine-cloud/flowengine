@@ -16,25 +16,25 @@ You run the portal. Your clients log in and see only what you give them access t
 
 ## Portal Tabs
 
-### Manage
+##### Manage
 Built mainly for n8n — this is what your clients see. The hosting layer is hidden unless you choose to expose it. Also includes basic management for OpenClaw and Docker instances (status, URL, notes).
 
-#### Overview
+##### Overview
 See detailed executions and workflows across all instances at once, with filters by workflow, status, and client. 
 
-#### UI Embeds
+##### UI Embeds
 Build embeddable chatbots, forms, and UI elements and link them to n8n workflows in one click. it will automatically pick up the webhook and trigger type.
 
-#### Templates
+##### Templates
 Set up once — clients browse and import workflows based on descriptions and see what credentials they need. Push updates so clients can update live workflows in one click, or push the same update to all your clients at once.
 
-#### Credentials
+##### Credentials
 Clients add their API keys through the portal and they go straight into their n8n instance. Configure one time the OAuth apps once under Settings (Microsoft, Google, Slack, X, Reddit, LinkedIn) and clients authenticate through the portal — their tokens go directly to their n8n.
 
-#### Services
+##### Services
 Link a WhatsApp API to clients' instances.
 
-#### Settings
+##### Settings
 n8n API key and manage client AI usage and choose who pays for it (works when hosting with FlowEngine)
 
 ---
