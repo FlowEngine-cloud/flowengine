@@ -198,7 +198,7 @@ migrations/supabase-schema.sql
 
 ## Security
 
-- All stored API keys (Stripe, SMTP passwords, n8n keys) are encrypted at rest using AES-256 via `ENCRYPTION_SECRET`
+- Stripe keys and SMTP passwords are encrypted at rest using AES-256 via `ENCRYPTION_SECRET`. n8n API keys are protected by Supabase's built-in database encryption.
 - Client sessions use Supabase PKCE auth flow
 - Row-level security enforced in the database - clients can only query their own data
 - Stripe and SMTP credentials are never exposed to the browser
