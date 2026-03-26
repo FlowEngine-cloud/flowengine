@@ -15,10 +15,9 @@ interface Props {
   instanceId: string;
   instanceName: string;
   instanceUrl?: string;
-  status?: string;
 }
 
-export function WebsitePortalContent({ instanceId, instanceName, instanceUrl, status }: Props) {
+export function WebsitePortalContent({ instanceId, instanceName, instanceUrl }: Props) {
   const { session } = useAuth();
   const [copied, setCopied] = useState(false);
 
@@ -65,8 +64,6 @@ export function WebsitePortalContent({ instanceId, instanceName, instanceUrl, st
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const isOnline = status === 'running' || status === 'active';
-
   return (
     <div className="flex flex-col h-full bg-black">
       {/* Sub-header */}
@@ -94,10 +91,6 @@ export function WebsitePortalContent({ instanceId, instanceName, instanceUrl, st
           ) : (
             <span className="text-white/20 text-sm">No URL configured</span>
           )}
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-400' : 'bg-white/20'}`} />
-          <span className="text-xs text-white/40 capitalize">{isOnline ? 'Online' : (status || 'Unknown')}</span>
         </div>
       </div>
 

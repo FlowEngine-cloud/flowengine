@@ -769,11 +769,38 @@ function PortalPageContent() {
           <SecondaryPanel
             sections={(() => {
               const sections: SecondaryPanelSection[] = [];
+              const portalManaged = emailFilteredInstances;
+              const sorted = [...portalManaged].sort((a, b) => a.instance_name.localeCompare(b.instance_name));
+
+              const n8nInsts = sorted.filter(i => { const st = (i as any).service_type; return st === 'n8n' || (!st && (i as any).status !== 'pending_deploy'); });
+              const ocInsts = sorted.filter(i => (i as any).service_type === 'openclaw');
+              const externalInsts = sorted.filter(i => { const st = (i as any).service_type; return st === 'website' || st === 'other'; });
+              const pendingInsts = sorted.filter(i => (i as any).status === 'pending_deploy');
+
+              const n8nSectionIcon = <svg fill="currentColor" fillRule="evenodd" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5"><path clipRule="evenodd" d="M24 8.4c0 1.325-1.102 2.4-2.462 2.4-1.146 0-2.11-.765-2.384-1.8h-3.436c-.602 0-1.115.424-1.214 1.003l-.101.592a2.38 2.38 0 01-.8 1.405c.412.354.704.844.8 1.405l.1.592A1.222 1.222 0 0015.719 15h.975c.273-1.035 1.237-1.8 2.384-1.8 1.36 0 2.461 1.075 2.461 2.4S20.436 18 19.078 18c-1.147 0-2.11-.765-2.384-1.8h-.975c-1.204 0-2.23-.848-2.428-2.005l-.101-.592a1.222 1.222 0 00-1.214-1.003H10.97c-.308.984-1.246 1.7-2.356 1.7-1.11 0-2.048-.716-2.355-1.7H4.817c-.308.984-1.246 1.7-2.355 1.7C1.102 14.3 0 13.225 0 11.9s1.102-2.4 2.462-2.4c1.183 0 2.172.815 2.408 1.9h1.337c.236-1.085 1.225-1.9 2.408-1.9 1.184 0 2.172.815 2.408 1.9h.952c.601 0 1.115-.424 1.213-1.003l.102-.592c.198-1.157 1.225-2.005 2.428-2.005h3.436c.274-1.035 1.238-1.8 2.384-1.8C22.898 6 24 7.075 24 8.4zm-1.23 0c0 .663-.552 1.2-1.232 1.2-.68 0-1.23-.537-1.23-1.2 0-.663.55-1.2 1.23-1.2.68 0 1.231.537 1.231 1.2zM2.461 13.1c.68 0 1.23-.537 1.23-1.2 0-.663-.55-1.2-1.23-1.2-.68 0-1.231.537-1.231 1.2 0 .663.55 1.2 1.23 1.2zm6.153 0c.68 0 1.231-.537 1.231-1.2 0-.663-.55-1.2-1.23-1.2-.68 0-1.231.537-1.231 1.2 0 .663.55 1.2 1.23 1.2zm10.462 3.7c.68 0 1.23-.537 1.23-1.2 0-.663-.55-1.2-1.23-1.2-.68 0-1.23.537-1.23 1.2 0 .663.55 1.2 1.23 1.2z" /></svg>;
+              const ocSectionIcon = <img src="/logos/openclaw.png" className="w-3.5 h-3.5 object-contain rounded" alt="" />;
+              const mapInst = (inst: typeof sorted[0]) => ({
+                id: inst.id,
+                label: inst.instance_name,
+                sublabel: inst.instance_url?.replace('https://', ''),
+                icon: (inst as any).service_type === 'openclaw'
+                  ? <img src="/logos/openclaw.png" className="w-5 h-5 object-contain rounded" alt="OpenClaw" />
+                  : (inst as any).service_type === 'n8n'
+                    ? <img src="/logos/n8n.svg" className="w-4 h-4 object-contain" alt="n8n" style={{ filter: 'brightness(0) invert(1) opacity(0.7)' }} />
+                    : (inst as any).service_type === 'website'
+                      ? <Globe className="w-4 h-4 text-white/60" />
+                      : <Link2 className="w-4 h-4 text-white/60" />,
+              });
+
+              if (n8nInsts.length > 0) sections.push({ title: 'FlowEngine', icon: n8nSectionIcon, items: n8nInsts.map(mapInst) });
+              if (ocInsts.length > 0) sections.push({ title: 'OpenClaw', icon: ocSectionIcon, items: ocInsts.map(mapInst) });
+              if (externalInsts.length > 0) sections.push({ title: 'External', icon: <Link2 className="w-3.5 h-3.5 text-white/60" />, items: externalInsts.map(mapInst) });
+              if (pendingInsts.length > 0) sections.push({ title: 'Not deployed', icon: <Server className="w-3.5 h-3.5" />, items: pendingInsts.map(mapInst) });
+
+              // In manage mode, also show n8n tabs below the instance groups
               if (instanceFilter !== 'all') {
-                // Show tabs for the selected instance — n8n vs OpenClaw vs Docker
                 const selectedInst = activePortalInstances.find(i => i.id === instanceFilter);
                 const st = selectedInst?.service_type;
-                // n8n gets full tab nav; all other types (openclaw, website, other) have no sub-tabs
                 if (!st || st === 'n8n') {
                   sections.push({
                     title: '',
@@ -784,65 +811,31 @@ function PortalPageContent() {
                     })),
                   });
                 }
-              } else {
-                // Show instance list grouped by service type
-                const portalManaged = emailFilteredInstances;
-                const sorted = [...portalManaged].sort((a, b) => a.instance_name.localeCompare(b.instance_name));
-                const ocInsts = sorted.filter(i => (i as any).service_type === 'openclaw');
-                const dockerInsts = sorted.filter(i => (i as any).service_type === 'website');
-                const pendingInsts = sorted.filter(i => (i as any).status === 'pending_deploy');
-                const n8nInsts = sorted.filter(i => {
-                  const st = (i as any).service_type;
-                  const status = (i as any).status;
-                  return (st === 'n8n' || st === 'other' || (!st && status !== 'pending_deploy'));
-                });
-                const n8nSectionIcon = <svg fill="currentColor" fillRule="evenodd" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5"><path clipRule="evenodd" d="M24 8.4c0 1.325-1.102 2.4-2.462 2.4-1.146 0-2.11-.765-2.384-1.8h-3.436c-.602 0-1.115.424-1.214 1.003l-.101.592a2.38 2.38 0 01-.8 1.405c.412.354.704.844.8 1.405l.1.592A1.222 1.222 0 0015.719 15h.975c.273-1.035 1.237-1.8 2.384-1.8 1.36 0 2.461 1.075 2.461 2.4S20.436 18 19.078 18c-1.147 0-2.11-.765-2.384-1.8h-.975c-1.204 0-2.23-.848-2.428-2.005l-.101-.592a1.222 1.222 0 00-1.214-1.003H10.97c-.308.984-1.246 1.7-2.356 1.7-1.11 0-2.048-.716-2.355-1.7H4.817c-.308.984-1.246 1.7-2.355 1.7C1.102 14.3 0 13.225 0 11.9s1.102-2.4 2.462-2.4c1.183 0 2.172.815 2.408 1.9h1.337c.236-1.085 1.225-1.9 2.408-1.9 1.184 0 2.172.815 2.408 1.9h.952c.601 0 1.115-.424 1.213-1.003l.102-.592c.198-1.157 1.225-2.005 2.428-2.005h3.436c.274-1.035 1.238-1.8 2.384-1.8C22.898 6 24 7.075 24 8.4zm-1.23 0c0 .663-.552 1.2-1.232 1.2-.68 0-1.23-.537-1.23-1.2 0-.663.55-1.2 1.23-1.2.68 0 1.231.537 1.231 1.2zM2.461 13.1c.68 0 1.23-.537 1.23-1.2 0-.663-.55-1.2-1.23-1.2-.68 0-1.231.537-1.231 1.2 0 .663.55 1.2 1.23 1.2zm6.153 0c.68 0 1.231-.537 1.231-1.2 0-.663-.55-1.2-1.23-1.2-.68 0-1.231.537-1.231 1.2 0 .663.55 1.2 1.23 1.2zm10.462 3.7c.68 0 1.23-.537 1.23-1.2 0-.663-.55-1.2-1.23-1.2-.68 0-1.23.537-1.23 1.2 0 .663.55 1.2 1.23 1.2z" /></svg>;
-                const ocSectionIcon = <img src="/logos/openclaw.png" className="w-3.5 h-3.5 object-contain rounded" alt="" />;
-                const mapInst = (inst: typeof sorted[0]) => ({
-                  id: inst.id,
-                  label: inst.instance_name,
-                  sublabel: inst.instance_url?.replace('https://', ''),
-                  icon: (inst as any).service_type === 'openclaw'
-                    ? <img src="/logos/openclaw.png" className="w-5 h-5 object-contain rounded" alt="OpenClaw" />
-                    : (inst as any).service_type === 'n8n'
-                      ? <img src="/logos/n8n.svg" className="w-4 h-4 object-contain" alt="n8n" style={{ filter: 'brightness(0) invert(1) opacity(0.7)' }} />
-                      : (inst as any).service_type === 'website'
-                        ? <Globe className="w-4 h-4 text-white/60" />
-                        : <Server className="w-4 h-4" />,
-                });
-                if (n8nInsts.length > 0) {
-                  sections.push({ title: 'n8n', icon: n8nSectionIcon, items: n8nInsts.map(mapInst) });
-                }
-                if (ocInsts.length > 0) {
-                  sections.push({ title: 'OpenClaw', icon: ocSectionIcon, items: ocInsts.map(mapInst) });
-                }
-                if (dockerInsts.length > 0) {
-                  sections.push({ title: 'Docker', icon: <Globe className="w-3.5 h-3.5 text-white/60" />, items: dockerInsts.map(mapInst) });
-                }
-                if (pendingInsts.length > 0) {
-                  sections.push({ title: 'Not deployed', icon: <Server className="w-3.5 h-3.5" />, items: pendingInsts.map(mapInst) });
-                }
               }
+
               return sections;
             })()}
-            selectedId={instanceFilter !== 'all' ? activePortalTab : undefined}
+            selectedId={instanceFilter !== 'all' ? instanceFilter : undefined}
             onSelect={(id) => {
               if (instanceFilter !== 'all') {
-                // Clicking Overview goes back to main instance list
-                if (id === 'overview') {
-                  setInstanceFilterState('all');
-                  setActivePortalTab('overview');
-                  window.history.replaceState(null, '', '/portal');
-                  return;
+                const isTab = INSTANCE_TABS.some(t => t.id === id);
+                if (isTab) {
+                  if (id === 'overview') {
+                    setInstanceFilterState('all');
+                    setActivePortalTab('overview');
+                    window.history.replaceState(null, '', '/portal');
+                    return;
+                  }
+                  setActivePortalTab(id);
+                  const params = new URLSearchParams(window.location.search);
+                  params.set('instance', instanceFilter);
+                  params.set('tab', id);
+                  updateUrl(params);
+                } else {
+                  // Navigate to a different instance
+                  setInstanceFilter(id);
                 }
-                // Tab selection
-                setActivePortalTab(id);
-                const params = new URLSearchParams(window.location.search);
-                params.set('instance', instanceFilter);
-                params.set('tab', id);
-                updateUrl(params);
               } else {
-                // Instance selection
                 setInstanceFilter(id);
               }
             }}
@@ -906,7 +899,7 @@ function PortalPageContent() {
                 const isFlowEngine = (selectedInst as any)?.platform === 'flowengine';
                 // n8n gets the full portal; everything else gets the simple URL + notes panel
                 if (st !== 'n8n' && st !== null && st !== undefined) {
-                  return <WebsitePortalContent key={instanceFilter} instanceId={instanceFilter} instanceName={selectedInst?.instance_name ?? instanceFilter} instanceUrl={selectedInst?.instance_url} status={selectedInst?.status} />;
+                  return <WebsitePortalContent key={instanceFilter} instanceId={instanceFilter} instanceName={selectedInst?.instance_name ?? instanceFilter} instanceUrl={selectedInst?.instance_url} />;
                 }
                 return <ClientPanelContent key={instanceFilter} instanceId={instanceFilter} portalEmbedded externalTab={activePortalTab} onTabChange={setActivePortalTab} isFlowEngine={isFlowEngine} />;
               })()}
