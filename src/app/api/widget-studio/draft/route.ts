@@ -214,6 +214,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
+
     // Get query params
     const { searchParams } = new URL(request.url);
     const draftId = searchParams.get('id');
