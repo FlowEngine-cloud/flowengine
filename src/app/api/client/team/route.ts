@@ -15,8 +15,8 @@ async function verifyAgencyClientRelation(agencyOwnerId: string, clientUserId: s
   const { data } = await supabaseAdmin
     .from('pay_per_instance_deployments')
     .select('id')
-    .eq('owner_id', agencyOwnerId)
-    .eq('user_id', clientUserId)
+    .eq('user_id', agencyOwnerId)
+    .eq('client_id', clientUserId)
     .limit(1);
   return (data && data.length > 0) || false;
 }
@@ -29,7 +29,7 @@ async function verifyClientHasAgency(clientUserId: string): Promise<boolean> {
   const { data } = await supabaseAdmin
     .from('pay_per_instance_deployments')
     .select('id')
-    .eq('user_id', clientUserId)
+    .eq('client_id', clientUserId)
     .limit(1);
   return (data && data.length > 0) || false;
 }

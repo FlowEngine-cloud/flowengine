@@ -12,6 +12,55 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================
+-- Storage schema (pre-created so storage-api finds tables on startup)
+-- ============================================
+CREATE TABLE IF NOT EXISTS storage.migrations (
+  id          integer      NOT NULL,
+  name        varchar(100) NOT NULL,
+  hash        varchar(40)  NOT NULL,
+  executed_at timestamp    DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS storage.buckets (
+  id                 text        NOT NULL PRIMARY KEY,
+  name               text        NOT NULL,
+  owner              uuid,
+  created_at         timestamptz DEFAULT now(),
+  updated_at         timestamptz DEFAULT now(),
+  public             boolean     DEFAULT false,
+  avif_autodetection boolean     DEFAULT false,
+  file_size_limit    bigint,
+  allowed_mime_types text[],
+  owner_id           text
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS bname ON storage.buckets USING btree (name);
+
+CREATE TABLE IF NOT EXISTS storage.objects (
+  id               uuid        NOT NULL DEFAULT uuid_generate_v4() PRIMARY KEY,
+  bucket_id        text        REFERENCES storage.buckets ON DELETE CASCADE,
+  name             text,
+  owner            uuid,
+  created_at       timestamptz DEFAULT now(),
+  updated_at       timestamptz DEFAULT now(),
+  last_accessed_at timestamptz DEFAULT now(),
+  metadata         jsonb,
+  path_tokens      text[]      GENERATED ALWAYS AS (string_to_array(name, '/')) STORED,
+  version          text,
+  owner_id         text,
+  user_metadata    jsonb
+);
+
+CREATE INDEX IF NOT EXISTS name_prefix_search ON storage.objects USING btree (name text_pattern_ops);
+
+GRANT USAGE ON SCHEMA storage TO authenticated, anon, service_role, supabase_storage_admin;
+GRANT ALL   ON storage.migrations TO supabase_storage_admin;
+GRANT ALL   ON storage.buckets    TO supabase_storage_admin, service_role;
+GRANT ALL   ON storage.objects    TO supabase_storage_admin, service_role;
+GRANT SELECT ON storage.buckets   TO authenticated, anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON storage.objects TO authenticated, anon;
+
+-- ============================================
 -- 1. profiles - User profiles (linked to auth.users)
 -- ============================================
 CREATE TABLE IF NOT EXISTS profiles (
@@ -71,6 +120,7 @@ CREATE TABLE IF NOT EXISTS team_members (
   token TEXT UNIQUE,
   accepted_at TIMESTAMPTZ,
   invited_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '7 days'),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -142,6 +192,7 @@ CREATE TABLE IF NOT EXISTS pay_per_instance_deployments (
   service_type TEXT DEFAULT 'n8n',
   is_external BOOLEAN DEFAULT false,
   n8n_api_key TEXT,
+  ai_payer TEXT DEFAULT 'agency' CHECK (ai_payer IN ('agency', 'client')),
   deleted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -415,11 +466,13 @@ CREATE POLICY "Users can view own deployments" ON pay_per_instance_deployments F
 CREATE POLICY "Users can manage own deployments" ON pay_per_instance_deployments FOR ALL
   USING (user_id = auth.uid());
 
--- Client instances: team-scoped access
+-- Client instances: team-scoped access (agency side) + client can read own assignments
 CREATE POLICY "Team can view client instances" ON client_instances FOR SELECT
   USING (team_id IN (SELECT team_id FROM profiles WHERE id = auth.uid()));
 CREATE POLICY "Team can manage client instances" ON client_instances FOR ALL
   USING (team_id IN (SELECT team_id FROM profiles WHERE id = auth.uid()));
+CREATE POLICY "Client can view own instance assignments" ON client_instances FOR SELECT
+  USING (user_id = auth.uid());
 
 -- Client invites: agency-scoped access
 CREATE POLICY "Agency can view sent invites" ON client_invites FOR SELECT USING (invited_by = auth.uid());
@@ -643,6 +696,33 @@ CREATE POLICY "Agency can manage custom entries" ON agency_client_custom_entries
 CREATE POLICY "Service role full access acce" ON agency_client_custom_entries FOR ALL TO service_role USING (true);
 
 -- ============================================
+-- 18. api_key - User API keys for external API and MCP access
+-- ============================================
+CREATE TABLE IF NOT EXISTS api_key (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  key_hash TEXT NOT NULL UNIQUE,
+  key_prefix TEXT NOT NULL,
+  last_used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_key_hash ON api_key(key_hash);
+
+ALTER TABLE api_key ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own api key" ON api_key
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own api key" ON api_key
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own api key" ON api_key
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own api key" ON api_key
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- ============================================
 -- Role grants (required for PostgREST + RLS to work)
 -- ============================================
 
@@ -669,6 +749,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON
   agency_client_custom_entries
 TO authenticated;
 
+GRANT SELECT, INSERT, UPDATE, DELETE ON api_key TO authenticated;
+
 -- service_role: full access (bypasses RLS via BYPASSRLS attribute)
 GRANT ALL ON
   profiles,
@@ -689,11 +771,18 @@ GRANT ALL ON
   agency_client_billing_settings,
   agency_manual_payments,
   agency_client_notes,
-  agency_client_custom_entries
+  agency_client_custom_entries,
+  api_key
 TO service_role;
 
 -- anon: read-only access to public/portal config tables
 GRANT SELECT ON portal_settings, widget_categories TO anon;
+
+-- ============================================
+-- Idempotent column patches (safe to re-run on existing installs)
+-- ============================================
+ALTER TABLE portal_settings ADD COLUMN IF NOT EXISTS flowengine_api_key TEXT;
+ALTER TABLE portal_settings ADD COLUMN IF NOT EXISTS flowengine_api_url TEXT;
 
 -- ============================================
 -- Done! Your FlowEngine Portal database is ready.

@@ -103,6 +103,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     environment:
       ANON_KEY: ${ANON_KEY}
       SERVICE_KEY: ${SERVICE_ROLE_KEY}
@@ -185,11 +187,13 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./migrations/supabase-schema.sql:/migrations/01-schema.sql
+      - ./migrations/add_client_instance_rls.sql:/migrations/02-client-rls.sql
       - ./migrations/seed.sql:/migrations/99-seed.sql
     command: >
       bash -c "
-        sleep 5 &&
+        sleep 10 &&
         psql -h postgres -U supabase_admin -d postgres -f /migrations/01-schema.sql || true &&
+        psql -h postgres -U supabase_admin -d postgres -f /migrations/02-client-rls.sql || true &&
         psql -h postgres -U supabase_admin -d postgres -f /migrations/99-seed.sql || true &&
         psql -h postgres -U supabase_admin -d postgres -c \"NOTIFY pgrst, 'reload schema';\" || true
       "
@@ -211,6 +215,7 @@ services:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
       NEXT_PUBLIC_APP_URL: ${SITE_URL:-http://localhost:3000}
+      ENCRYPTION_SECRET: ${ENCRYPTION_SECRET}
     depends_on:
       postgres:
         condition: service_healthy

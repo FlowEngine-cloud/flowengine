@@ -78,11 +78,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to update invitation' }, { status: 500 });
     }
 
-    // Send email - use correct URL based on payment type
-    // Agency-paid (has instance_id) uses /invite/accept-access
-    // Client-paid uses /invite/accept
-    const invitePath = invite.instance_id ? '/invite/accept-access' : '/invite/accept';
-    const inviteUrl = buildAppUrl(`${invitePath}?token=${newToken}`);
+    // Always use access-grant path (no payment/checkout needed in OSS)
+    const inviteUrl = buildAppUrl(`/invite/accept-access?token=${newToken}`);
     const agencyName = profile?.full_name || 'Your agency';
 
     // Build agency SMTP config if enabled
@@ -98,26 +95,12 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      // Send appropriate email based on payment type (derived from instance_id)
-      if (invite.instance_id) {
-        // Agency pays - send access grant email
-        await emailService.sendClientAccessGrant(
-          invite.email,
-          agencyName,
-          inviteUrl,
-          agencySmtp
-        );
-      } else {
-        // Client pays - send invitation with payment details
-        await emailService.sendClientInvitation(
-          invite.email,
-          agencyName,
-          invite.storage_size_gb,
-          invite.billing_cycle || 'annual',
-          inviteUrl,
-          agencySmtp
-        );
-      }
+      await emailService.sendClientAccessGrant(
+        invite.email,
+        agencyName,
+        inviteUrl,
+        agencySmtp
+      );
     } catch (emailError) {
       console.error('Failed to send invitation email:', emailError);
       return NextResponse.json({ error: 'Failed to send invitation email' }, { status: 500 });

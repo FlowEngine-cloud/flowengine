@@ -34,7 +34,7 @@ export interface ConnectInstanceConfig {
   name: string;
   instanceUrl: string;
   apiKey: string;
-  serviceType: 'n8n' | 'openclaw';
+  serviceType: 'n8n' | 'openclaw' | 'other';
 }
 
 const CLOUD_TIERS = [
@@ -69,7 +69,7 @@ export default function DeployInstanceModal({
   const [pricingLoading, setPricingLoading] = useState(false);
 
   // Connect mode state
-  const [serviceType, setServiceType] = useState<'n8n' | 'openclaw'>('n8n');
+  const [serviceType, setServiceType] = useState<'n8n' | 'openclaw' | 'other'>('n8n');
   const [instanceUrl, setInstanceUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
 
@@ -155,7 +155,8 @@ export default function DeployInstanceModal({
   };
 
   const handleConnectInstance = () => {
-    if (!instanceName.trim() || !instanceUrl.trim()) return;
+    if (!instanceName.trim()) return;
+    if (serviceType !== 'other' && !instanceUrl.trim()) return;
     if (serviceType === 'n8n' && !apiKey.trim()) {
       setDeployError('API key is required for n8n instances');
       return;
@@ -173,7 +174,7 @@ export default function DeployInstanceModal({
   };
 
   const isProcessing = isDeploying || directCharging;
-  const canConnect = instanceName.trim() && instanceUrl.trim() && (serviceType !== 'n8n' || apiKey.trim());
+  const canConnect = instanceName.trim() && (serviceType === 'other' || instanceUrl.trim()) && (serviceType !== 'n8n' || apiKey.trim());
 
   if (!isOpen) return null;
 
@@ -246,7 +247,7 @@ export default function DeployInstanceModal({
               {/* Service Type */}
               <div>
                 <label className="block text-sm font-medium text-white/60 mb-2">Service Type</label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => setServiceType('n8n')}
                     className={`p-3 rounded-lg border transition-all cursor-pointer text-left ${
@@ -256,7 +257,7 @@ export default function DeployInstanceModal({
                     }`}
                   >
                     <div className="text-white font-medium text-sm">n8n</div>
-                    <div className="text-white/60 text-sm mt-0.5">Workflow automation</div>
+                    <div className="text-white/60 text-xs mt-0.5">Workflow automation</div>
                   </button>
                   <button
                     onClick={() => setServiceType('openclaw')}
@@ -267,22 +268,47 @@ export default function DeployInstanceModal({
                     }`}
                   >
                     <div className="text-white font-medium text-sm">OpenClaw</div>
-                    <div className="text-white/60 text-sm mt-0.5">AI agent runtime</div>
+                    <div className="text-white/60 text-xs mt-0.5">AI agent runtime</div>
+                  </button>
+                  <button
+                    onClick={() => setServiceType('other')}
+                    className={`p-3 rounded-lg border transition-all cursor-pointer text-left ${
+                      serviceType === 'other'
+                        ? 'border-white bg-gray-800/30'
+                        : 'border-gray-700 bg-gray-800/30 hover:border-gray-600'
+                    }`}
+                  >
+                    <div className="text-white font-medium text-sm">Other</div>
+                    <div className="text-white/60 text-xs mt-0.5">Any external service</div>
                   </button>
                 </div>
               </div>
 
-              {/* Instance URL */}
-              <div>
-                <label className="block text-sm font-medium text-white/60 mb-2">Instance URL</label>
-                <input
-                  type="url"
-                  value={instanceUrl}
-                  onChange={(e) => setInstanceUrl(e.target.value)}
-                  placeholder={serviceType === 'n8n' ? 'https://n8n.example.com' : 'https://openclaw.example.com'}
-                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-800 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white focus:border-white"
-                />
-              </div>
+              {/* Instance URL — optional for Other */}
+              {serviceType !== 'other' && (
+                <div>
+                  <label className="block text-sm font-medium text-white/60 mb-2">Instance URL</label>
+                  <input
+                    type="url"
+                    value={instanceUrl}
+                    onChange={(e) => setInstanceUrl(e.target.value)}
+                    placeholder={serviceType === 'n8n' ? 'https://n8n.example.com' : 'https://openclaw.example.com'}
+                    className="w-full px-4 py-3 bg-gray-900/50 border border-gray-800 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white focus:border-white"
+                  />
+                </div>
+              )}
+              {serviceType === 'other' && (
+                <div>
+                  <label className="block text-sm font-medium text-white/60 mb-2">URL <span className="text-white/30 font-normal">(optional)</span></label>
+                  <input
+                    type="url"
+                    value={instanceUrl}
+                    onChange={(e) => setInstanceUrl(e.target.value)}
+                    placeholder="https://service.example.com"
+                    className="w-full px-4 py-3 bg-gray-900/50 border border-gray-800 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white focus:border-white"
+                  />
+                </div>
+              )}
 
               {/* API Key (required for n8n only) */}
               {serviceType === 'n8n' && (
@@ -308,7 +334,9 @@ export default function DeployInstanceModal({
                 <p className="text-white/60 text-sm">
                   {serviceType === 'n8n'
                     ? 'Your n8n instance will be connected via its REST API. You can manage workflows, executions, and credentials directly from the portal.'
-                    : 'Your OpenClaw instance will be registered with its URL. The portal will monitor its health status and provide a quick-access link.'}
+                    : serviceType === 'openclaw'
+                    ? 'Your OpenClaw instance will be registered with its URL. The portal will monitor its health status and provide a quick-access link.'
+                    : 'Register any external service or tool. Add an optional URL for quick access.'}
                 </p>
               </div>
             </>

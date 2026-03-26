@@ -42,7 +42,7 @@ const BOTTOM_ITEMS: NavItem[] = [
 export default function PortalSidebar() {
   const pathname = usePathname();
   const { logoUrl } = useAgencyLogo();
-  const { role } = usePortalRole();
+  const { role, allowFullAccess } = usePortalRole();
 
   const knownSections = ['/portal/hosting', '/portal/services', '/portal/clients', '/portal/templates', '/portal/ui-studio', '/portal/settings'];
 
@@ -108,10 +108,11 @@ export default function PortalSidebar() {
       <nav className="flex-1 flex flex-col items-center gap-1 overflow-y-auto scrollbar-hide">
         {role === 'client' ? (
           <>
-            {/* Client mode: Overview + Hosting & Services (clients have paid access) */}
+            {/* Client: Manage always visible */}
             {renderNavItem({ icon: LayoutDashboard, label: 'Manage', href: '/portal' })}
-            {renderNavItem({ icon: Server, label: 'Hosting', href: '/portal/hosting' })}
-            {renderNavItem({ icon: Plug, label: 'Services', href: '/portal/services' })}
+            {/* Full access clients also get Hosting + Services */}
+            {allowFullAccess && renderNavItem({ icon: Server, label: 'Hosting', href: '/portal/hosting' })}
+            {allowFullAccess && renderNavItem({ icon: Plug, label: 'Services', href: '/portal/services' })}
           </>
         ) : (
           <>

@@ -117,7 +117,14 @@ export function PlatformSettings() {
         (updatedServer as Record<string, unknown>)[field] = config[field];
       }
       setServerConfig(updatedServer);
-      if (section === 'flowengine') setFeConnectionStatus(null);
+      if (section === 'flowengine') {
+        setFeConnectionStatus(null);
+        // Notify hooks to re-fetch FlowEngine instances immediately
+        try {
+          sessionStorage.removeItem('portal-hosting-instances-v2');
+          window.dispatchEvent(new Event('flowengine-key-updated'));
+        } catch {}
+      }
 
       setMessage({ section, type: 'success', text: 'Settings saved successfully' });
       setTimeout(() => setMessage(null), 3000);
@@ -138,13 +145,16 @@ export function PlatformSettings() {
       // If the field shows '********' (masked/unchanged), fall back to DB key via GET.
       const formKey = config.flowengine_api_key;
       const hasLiveKey = formKey && formKey !== '********';
+      // Always POST so we can pass both the key and the URL from the form
       const res = await fetch('/api/flowengine/pricing', {
-        method: hasLiveKey ? 'POST' : 'GET',
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
-          ...(hasLiveKey ? { 'Content-Type': 'application/json' } : {}),
+          'Content-Type': 'application/json',
         },
-        ...(hasLiveKey ? { body: JSON.stringify({ apiKey: formKey }) } : {}),
+        body: JSON.stringify({
+          ...(hasLiveKey ? { apiKey: formKey } : {}),
+        }),
       });
       const data = await res.json();
       if (data.connected) {

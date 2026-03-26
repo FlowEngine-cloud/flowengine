@@ -388,7 +388,7 @@ export default function TemplatesPage() {
                       <div className="flex flex-wrap gap-1.5">
                         {extractedCredentials.map((cred) => (
                           <div key={cred.type} className="flex items-center gap-1.5 px-2 py-1 bg-gray-800/30 border border-gray-700 rounded text-sm">
-                            <CredentialIcon type={cred.type} fallback="none" className="h-3.5 w-3.5 text-gray-400" />
+                            <CredentialIcon type={cred.type} fallback="key" className="h-3.5 w-3.5 text-gray-400" />
                             <span className="text-white">{cred.name}</span>
                           </div>
                         ))}
@@ -799,7 +799,7 @@ export default function TemplatesPage() {
                           key={cred.type}
                           className="flex items-center gap-1.5 px-2 py-1 bg-gray-800/30 border border-gray-700 rounded text-sm"
                         >
-                          <CredentialIcon type={cred.type} fallback="none" className="h-3.5 w-3.5 text-gray-400" />
+                          <CredentialIcon type={cred.type} fallback="key" className="h-3.5 w-3.5 text-gray-400" />
                           <span className="text-white">{cred.name}</span>
                         </div>
                       ))}

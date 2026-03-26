@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { usePortalInstances, PortalInstance } from '@/components/portal/usePortalInstances';
+import { PortalInstance } from '@/components/portal/usePortalInstances';
 import { useAuth } from '@/components/AuthContext';
-import { Server, ExternalLink, Loader2, Plus, Globe, CreditCard } from 'lucide-react';
+import { Server, ExternalLink, Loader2, Plus, Globe, CreditCard, Link2 } from 'lucide-react';
 import { useHostingContext } from './context';
 
 // ─── Service icons (module-level, stable references) ─────────────────────────
@@ -25,7 +25,8 @@ function openclawImg(cls: string) {
 function serviceCardIcon(serviceType: string | null | undefined) {
   if (!serviceType) return <Server className="w-4 h-4 text-white/30" />;
   if (serviceType === 'openclaw') return openclawImg('w-6 h-6');
-  if (serviceType === 'docker' || serviceType === 'website') return <Globe className="w-5 h-5 text-white/60" />;
+  if (serviceType === 'website') return <Globe className="w-5 h-5 text-white/60" />;
+  if (serviceType === 'other') return <Link2 className="w-5 h-5 text-white/60" />;
   return n8nSvg('w-5 h-5');
 }
 
@@ -33,12 +34,12 @@ function sectionIcon(key: string) {
   if (key === 'n8n') return n8nSvg('w-4 h-4');
   if (key === 'openclaw') return openclawImg('w-4 h-4');
   if (key === 'website') return <Globe className="w-4 h-4" />;
+  if (key === 'other') return <Link2 className="w-4 h-4" />;
   return <Server className="w-4 h-4" />;
 }
 
 export default function HostingPage() {
-  const { instances, loading } = usePortalInstances();
-  const { liveStatus, openDeployModal } = useHostingContext();
+  const { instances, instancesLoading: loading, liveStatus, openDeployModal } = useHostingContext();
   const { session } = useAuth();
   const router = useRouter();
   const [loadingPortal, setLoadingPortal] = useState<string | null>(null);
@@ -91,6 +92,14 @@ export default function HostingPage() {
         </span>
       );
     }
+    // External instances have no live status endpoint — show neutral badge
+    if (inst.is_external || inst.service_type === 'other') {
+      return (
+        <span className="px-2 py-0.5 text-xs rounded-full bg-gray-800/30 text-white/40 border border-gray-700 inline-flex items-center gap-1.5 shrink-0">
+          External
+        </span>
+      );
+    }
     const s = liveStatus[inst.id] || inst.status;
     if (s === 'running' || s === 'active') return (
       <span className="px-2 py-0.5 text-xs rounded-full bg-green-500/10 text-green-400 border border-green-500/20 inline-flex items-center gap-1.5 shrink-0">
@@ -137,7 +146,7 @@ export default function HostingPage() {
             </p>
           ) : (
             <p className="text-xs text-white/30 mt-0.5">
-              {inst.status === 'pending_deploy' ? 'Choose service to deploy' : 'Ready to redeploy'}
+              {inst.deleted_at ? 'Deleted — click to redeploy' : inst.status === 'pending_deploy' ? 'Choose service to deploy' : 'Not configured'}
             </p>
           )}
         </div>
@@ -163,16 +172,20 @@ export default function HostingPage() {
     </button>
   );
 
-  const notDeployed = instances.filter(i => !i.service_type || i.deleted_at || i.status === 'pending_deploy');
-  const n8nInstances = instances.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy');
-  const openclawInstances = instances.filter(i => i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy');
-  const websiteInstances = instances.filter(i => (i.service_type === 'docker' || i.service_type === 'website') && !i.deleted_at && i.status !== 'pending_deploy');
+  // Hide only soft-deleted external instances; active external ones show in their service type section
+  const managed = instances.filter(i => !(i.is_external && i.deleted_at));
+  const notDeployed = managed.filter(i => !i.service_type || i.deleted_at || i.status === 'pending_deploy');
+  const n8nInstances = managed.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy');
+  const openclawInstances = managed.filter(i => i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy');
+  const websiteInstances = managed.filter(i => i.service_type === 'website' && !i.deleted_at && i.status !== 'pending_deploy');
+  const otherInstances = managed.filter(i => i.service_type === 'other' && !i.deleted_at && i.status !== 'pending_deploy');
 
-  const sections = [
+  const sections: Array<{ key: string; title: string; items: typeof managed; icon?: React.ReactNode }> = [
     { key: 'n8n',          title: 'n8n',          items: n8nInstances },
-    { key: 'openclaw',     title: 'OpenClaw',      items: openclawInstances },
-    { key: 'website',      title: 'Website',       items: websiteInstances },
-    { key: 'not-deployed', title: 'Not deployed',  items: notDeployed },
+    { key: 'openclaw',     title: 'OpenClaw',     items: openclawInstances },
+    { key: 'website',      title: 'Website',      items: websiteInstances },
+    { key: 'other',        title: 'External',     items: otherInstances },
+    { key: 'not-deployed', title: 'Not deployed', items: notDeployed },
   ].filter(s => s.items.length > 0);
 
   return (
@@ -181,9 +194,9 @@ export default function HostingPage() {
         {sections.map(section => (
           <div key={section.key}>
             <div className="flex items-center gap-2 mb-4">
-              <span className="flex-shrink-0 text-white/30">{sectionIcon(section.key)}</span>
-              <span className="text-sm font-semibold text-white/30 uppercase tracking-wider">{section.title}</span>
-              <span className="text-xs text-white/30 font-normal">{section.items.length}</span>
+              <span className="flex-shrink-0 text-white/50">{section.icon ?? sectionIcon(section.key)}</span>
+              <span className="text-xs font-semibold text-white/50 uppercase tracking-wider">{section.title}</span>
+              <span className="text-xs text-white/25 font-normal">{section.items.length}</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {section.items.map(inst => renderCard(inst))}

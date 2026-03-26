@@ -256,7 +256,7 @@ function isSafeImageUrl(url: string | null | undefined): boolean {
  * When embedded=true, background effects, preview banner, and header are hidden
  * so it fits cleanly inside the portal three-column layout.
  */
-export function ClientPanelContent({ instanceId, embedded = false, portalEmbedded = false, externalTab, onTabChange, backUrl }: { instanceId: string; embedded?: boolean; portalEmbedded?: boolean; externalTab?: string; onTabChange?: (tab: string) => void; backUrl?: string }) {
+export function ClientPanelContent({ instanceId, embedded = false, portalEmbedded = false, externalTab, onTabChange, backUrl, isFlowEngine = false }: { instanceId: string; embedded?: boolean; portalEmbedded?: boolean; externalTab?: string; onTabChange?: (tab: string) => void; backUrl?: string; isFlowEngine?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { session } = useAuth();
@@ -1052,13 +1052,19 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
       } finally {
         setLoading(false);
         setInitialLoadComplete(true);
+        // Reset all loading states so UI never gets stuck in an infinite spinner
+        setWorkflowsLoading(false);
+        setWidgetsLoading(false);
+        setExecutionsLoading(false);
       }
     };
 
     fetchData();
   }, [session, instanceId, router, isPreviewMode]);
 
-  const fetchWorkflows = async () => {
+  // skipVerification: true when called right after save/verify — don't let a transient
+  // n8n error override the verified=true that was just confirmed by the verify-api step.
+  const fetchWorkflows = async (skipVerification = false) => {
     try {
       const res = await fetch(`/api/client-panel/${instanceId}/workflows`, {
         headers: { Authorization: `Bearer ${session?.access_token}` },
@@ -1066,22 +1072,23 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
       if (res.ok) {
         const data = await res.json();
         setWorkflows(data.workflows || []);
-        // Silently verify in background - update status based on API response
-        // This catches cases where API key becomes invalid after being saved
-        if (data.workflows && !data.error) {
-          setApiVerified(true);
-          setApiError(null);
-        } else if (data.error) {
-          setApiVerified(false);
-          setApiError(data.error);
+        if (!skipVerification) {
+          // Update verification status based on API response
+          // This catches cases where API key becomes invalid after being saved
+          if (data.workflows && !data.error) {
+            setApiVerified(true);
+            setApiError(null);
+          } else if (data.error) {
+            setApiVerified(false);
+            setApiError(data.error);
+          }
         }
-      } else {
-        // API call failed - mark as not verified
+      } else if (!skipVerification) {
         setApiVerified(false);
       }
     } catch (error) {
       console.error('Failed to fetch workflows:', error);
-      setApiVerified(false);
+      if (!skipVerification) setApiVerified(false);
     } finally {
       setWorkflowsLoading(false);
     }
@@ -1220,8 +1227,9 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
       if (!verifyData.verified && verifyData.error) {
         setApiError(verifyData.error);
       } else if (verifyData.verified) {
-        // Refresh all data with new API key / external URL
-        fetchWorkflows();
+        // Refresh all data with new API key / external URL.
+        // skipVerification=true so a transient n8n error doesn't flip verified back to false.
+        fetchWorkflows(true);
         refetchExecutions(timeRange);
       }
     } catch (error) {
@@ -2370,7 +2378,7 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
               href={`/portal/${instance.id}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-3 py-2 text-sm text-white/60 hover:text-white bg-gray-900/50 border border-gray-800 hover:border-gray-700 rounded-lg transition-colors"
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-white text-black hover:bg-gray-100 rounded-lg font-semibold transition-all"
             >
               <ExternalLink className="w-3.5 h-3.5 shrink-0" />
               Client Portal
@@ -2382,7 +2390,7 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
                 href={instance.instance_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 px-3 py-2 text-sm text-white/60 hover:text-white bg-gray-900/50 border border-gray-800 hover:border-gray-700 rounded-lg transition-colors"
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm border border-gray-700 hover:bg-gray-700 text-white/60 rounded-lg font-medium transition-colors"
               >
                 <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                 n8n Management
@@ -2931,8 +2939,12 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
               {!apiKey ? (
                 <div className="text-center py-12 border border-dashed border-gray-800 rounded-xl">
                   <Key className="h-12 w-12 text-gray-700 mx-auto mb-4" />
-                  <p className="text-gray-400 mb-2">Connect your n8n instance</p>
-                  <p className="text-gray-600 text-sm mb-4">Add your n8n API key to see workflows and create UI components</p>
+                  <p className="text-gray-400 mb-2">{isFlowEngine ? 'Connect your FlowEngine n8n instance' : 'Connect your n8n instance'}</p>
+                  <p className="text-gray-600 text-sm mb-4">
+                    {isFlowEngine
+                      ? 'Add your n8n API key from your FlowEngine instance settings to see workflows and create UI components'
+                      : 'Add your n8n API key to see workflows and create UI components'}
+                  </p>
                   <button
                     onClick={() => setActiveTab('settings')}
                     className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl text-sm font-medium transition-all"

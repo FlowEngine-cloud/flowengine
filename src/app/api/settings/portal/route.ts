@@ -45,10 +45,15 @@ export async function GET(req: NextRequest) {
       .from('portal_settings')
       .select('*')
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (error) {
       return NextResponse.json({ error: 'Failed to load settings' }, { status: 500 });
+    }
+
+    // No row yet — return safe empty defaults so the UI doesn't break
+    if (!data) {
+      return NextResponse.json({ oauth_credentials: {} });
     }
 
     // Mask sensitive fields - only show if set (boolean) not the actual value
@@ -57,6 +62,11 @@ export async function GET(req: NextRequest) {
       if (masked[field]) {
         masked[field] = '********';
       }
+    }
+    // Surface flowengine_api_key stored in oauth_credentials (fallback for older installs missing the column)
+    const oauthCreds = masked.oauth_credentials || {};
+    if (!masked.flowengine_api_key && oauthCreds.flowengine_api_key) {
+      masked.flowengine_api_key = '********';
     }
     // Remove internal fields
     delete masked.id;
@@ -99,11 +109,45 @@ export async function PATCH(req: NextRequest) {
     updates.updated_at = new Date().toISOString();
     updates.updated_by = user.id;
 
-    // Update the single settings row
-    const { error } = await getSupabaseAdmin()
+    // Ensure a row exists, then update it
+    const { data: existing } = await getSupabaseAdmin()
       .from('portal_settings')
-      .update(updates)
-      .not('id', 'is', null); // Updates all rows (there should be only one)
+      .select('id')
+      .limit(1)
+      .maybeSingle();
+
+    // flowengine_api_key may not exist as a column in older installs — fall back to oauth_credentials JSONB
+    const JSONB_FALLBACK_FIELDS = ['flowengine_api_key'];
+
+    const doUpsert = async (payload: Record<string, any>) => {
+      if (existing?.id) {
+        return getSupabaseAdmin().from('portal_settings').update(payload).eq('id', existing.id);
+      }
+      return getSupabaseAdmin().from('portal_settings').insert(payload);
+    };
+
+    let { error } = await doUpsert(updates);
+
+    // If a column doesn't exist (42703), move those fields into oauth_credentials and retry
+    if (error?.code === '42703') {
+      const fallback: Record<string, any> = {};
+      for (const f of JSONB_FALLBACK_FIELDS) {
+        if (updates[f] !== undefined) {
+          fallback[f] = updates[f];
+          delete updates[f];
+        }
+      }
+      if (Object.keys(fallback).length > 0) {
+        // Merge into existing oauth_credentials
+        const { data: row } = await getSupabaseAdmin()
+          .from('portal_settings')
+          .select('oauth_credentials')
+          .limit(1)
+          .maybeSingle();
+        updates.oauth_credentials = { ...(row?.oauth_credentials || {}), ...fallback };
+        ({ error } = await doUpsert(updates));
+      }
+    }
 
     if (error) {
       console.error('[portal-settings] Update error:', JSON.stringify(error), 'code:', error.code, 'msg:', error.message, 'details:', error.details);

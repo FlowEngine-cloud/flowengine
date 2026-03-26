@@ -172,12 +172,9 @@ export default function CredentialsTab({
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-semibold text-white">Credentials</h2>
-            <span className="px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider bg-white text-black border border-white rounded-full">Beta</span>
           </div>
           <p className="text-sm text-gray-500 mt-1">
             Credentials that are not in use in your workflows will not appear here.
-            <br />
-            Some credentials might not be synced correctly. Please contact us if you have any error: <a href="mailto:hi@flowengie.cloud" className="text-gray-400 hover:text-white transition-colors">hi@flowengie.cloud</a>
           </p>
         </div>
         <div className="flex items-center gap-3">

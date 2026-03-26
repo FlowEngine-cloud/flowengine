@@ -68,16 +68,44 @@ export function AgencyBranding() {
     }
   };
 
+  const compressImage = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = (e) => {
+        // SVGs don't need canvas processing — store as-is
+        if (file.type === 'image/svg+xml') {
+          resolve(e.target?.result as string);
+          return;
+        }
+        const img = new Image();
+        img.onerror = reject;
+        img.onload = () => {
+          const MAX = 400;
+          let { width, height } = img;
+          if (width > MAX || height > MAX) {
+            if (width > height) { height = Math.round((height * MAX) / width); width = MAX; }
+            else { width = Math.round((width * MAX) / height); height = MAX; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !session) return;
 
-    // Validate file
     if (!file.type.startsWith('image/')) {
       setMessage({ type: 'error', text: 'Please select an image file' });
       return;
     }
-
     if (file.size > 2 * 1024 * 1024) {
       setMessage({ type: 'error', text: 'Image must be less than 2MB' });
       return;
@@ -87,40 +115,17 @@ export function AgencyBranding() {
     setMessage(null);
 
     try {
-      // Upload to Supabase storage (dedicated agency-branding bucket)
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
+      const dataUrl = await compressImage(file);
 
-      const { error: uploadError } = await supabase.storage
-        .from('agency-branding')
-        .upload(fileName, file, { upsert: true });
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('agency-branding')
-        .getPublicUrl(fileName);
-
-      const publicUrl = urlData.publicUrl;
-
-      // Update profile
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ agency_logo_url: publicUrl })
+        .update({ agency_logo_url: dataUrl })
         .eq('id', user?.id);
 
-      if (updateError) {
-        throw updateError;
-      }
+      if (updateError) throw updateError;
 
-      setLogoUrl(publicUrl);
-      // Update cache for loading spinners
-      if (user?.id) {
-        updateCachedAgencyLogo(publicUrl, user.id);
-      }
+      setLogoUrl(dataUrl);
+      if (user?.id) updateCachedAgencyLogo(dataUrl, user.id);
       setMessage({ type: 'success', text: 'Logo uploaded successfully!' });
     } catch (error: any) {
       console.error('Error uploading logo:', error);

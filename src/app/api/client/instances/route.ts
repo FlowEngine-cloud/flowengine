@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isValidUUID, checkRateLimit } from '@/lib/validation';
 import { resolveEffectiveUserId } from '@/lib/teamAccess';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getPortalSettings } from '@/lib/portalSettings';
+import { createFlowEngineClient } from '@/lib/flowengine';
 
 
 // GET: List client instances for an agency
@@ -40,6 +42,7 @@ export async function GET(req: NextRequest) {
             created_at,
             user_id,
             is_external,
+            service_type,
             deleted_at
           )
         `)
@@ -47,7 +50,7 @@ export async function GET(req: NextRequest) {
       // Instances where client invited this agency
       supabaseAdmin
         .from('pay_per_instance_deployments')
-        .select('id, instance_name, instance_url, status, storage_limit_gb, created_at, user_id, is_external')
+        .select('id, instance_name, instance_url, status, storage_limit_gb, created_at, user_id, is_external, service_type')
         .eq('invited_by_user_id', effectiveUserId)
         .is('deleted_at', null)
     ]);
@@ -72,12 +75,19 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Get all accepted invites for linking (agency-invited clients + name-only clients)
-    const { data: invites } = await supabaseAdmin
-      .from('client_invites')
-      .select('id, email, name, accepted_by')
-      .eq('invited_by', effectiveUserId)
-      .eq('status', 'accepted');
+    // Get all invites: accepted (for linking) + pending (to show in client list)
+    const [{ data: invites }, { data: pendingInvites }] = await Promise.all([
+      supabaseAdmin
+        .from('client_invites')
+        .select('id, email, name, accepted_by')
+        .eq('invited_by', effectiveUserId)
+        .eq('status', 'accepted'),
+      supabaseAdmin
+        .from('client_invites')
+        .select('id, email, name')
+        .eq('invited_by', effectiveUserId)
+        .eq('status', 'pending'),
+    ]);
 
     // Define types for the data structures
     type InviteRecord = {
@@ -98,6 +108,7 @@ export async function GET(req: NextRequest) {
         storage_limit_gb: number;
         created_at: string;
         is_external?: boolean;
+        service_type?: string | null;
         deleted_at?: string | null;
       } | null;
     };
@@ -116,10 +127,29 @@ export async function GET(req: NextRequest) {
       inviteNameById.set(inv.id, inv.name);
     });
 
-    // Transform agency-invited instances (skip records with no instance data)
-    const agencyInvitedMapped = (clientInstances || [])
-      .filter((ci: ClientInstanceRecord) => ci.instance)
-      .map((ci: ClientInstanceRecord) => {
+    // Transform agency-invited instances.
+    // Records with no local instance data are FE-hosted instances (not in pay_per_instance_deployments).
+    const withLocalInstance = (clientInstances || []).filter((ci: ClientInstanceRecord) => ci.instance);
+    const withoutLocalInstance = (clientInstances || []).filter((ci: ClientInstanceRecord) => !ci.instance);
+
+    // For FE-hosted assigned instances: fetch details from FlowEngine API
+    const feInstanceMap = new Map<string, any>();
+    if (withoutLocalInstance.length > 0) {
+      try {
+        const portalSettings = await getPortalSettings();
+        const feClient = createFlowEngineClient(portalSettings.flowengine_api_key || undefined);
+        if (feClient) {
+          const feInstances = await feClient.listInstances();
+          feInstances.forEach((i: any) => feInstanceMap.set(i.id, i));
+        }
+      } catch (err) {
+        console.warn('[GET client/instances] FE instance fetch failed:', err);
+      }
+    }
+
+    const agencyInvitedMapped = [
+      // Local (OSS-hosted) instances
+      ...withLocalInstance.map((ci: ClientInstanceRecord) => {
         const invite = inviteByUserId.get(ci.user_id);
         const isDeleted = !!ci.instance?.deleted_at;
         return {
@@ -135,8 +165,35 @@ export async function GET(req: NextRequest) {
           client_name: invite?.id ? (inviteNameById.get(invite.id) || undefined) : undefined,
           client_paid: false,
           is_external: ci.instance?.is_external || false,
+          service_type: ci.instance?.service_type || null,
+          invite_status: 'accepted',
         };
-      });
+      }),
+      // FlowEngine-hosted instances (details fetched from FE API)
+      ...withoutLocalInstance
+        .filter((ci: ClientInstanceRecord) => feInstanceMap.has(ci.instance_id))
+        .map((ci: ClientInstanceRecord) => {
+          const feInst = feInstanceMap.get(ci.instance_id);
+          const invite = inviteByUserId.get(ci.user_id);
+          return {
+            instance_id: ci.instance_id,
+            user_id: ci.user_id,
+            invite_id: invite?.id,
+            instance_name: feInst.instance_name,
+            instance_url: feInst.instance_url,
+            status: feInst.status,
+            storage_limit_gb: feInst.storage_gb,
+            created_at: feInst.created_at,
+            client_email: invite?.email || clientProfiles[ci.user_id] || undefined,
+            client_name: invite?.id ? (inviteNameById.get(invite.id) || undefined) : undefined,
+            client_paid: false,
+            is_external: false,
+            service_type: feInst.service_type || 'n8n',
+            invite_status: 'accepted',
+            platform: 'flowengine' as const,
+          };
+        }),
+    ];
 
     // Transform client-invited instances (client paid, invited agency)
     const clientInvitedMapped = (clientInvitedInstances || []).map(inst => ({
@@ -152,6 +209,8 @@ export async function GET(req: NextRequest) {
       client_name: undefined,
       client_paid: true,
       is_external: inst.is_external || false,
+      service_type: (inst as any).service_type || null,
+      invite_status: 'accepted',
     }));
 
     // Merge both sources
@@ -185,9 +244,34 @@ export async function GET(req: NextRequest) {
         client_name: inv.name || undefined,
         client_paid: false,
         is_external: false,
+        invite_status: 'accepted',
       }));
 
-    return NextResponse.json({ instances: [...instances, ...inviteOnlyClients] });
+    // Include pending invites (email-invited clients who haven't accepted yet)
+    const pendingClients = (pendingInvites || []).map((inv: { id: string; email: string; name: string | null }) => ({
+      instance_id: `invite:${inv.id}`,
+      user_id: `pending:${inv.id}`,
+      invite_id: inv.id,
+      instance_name: '',
+      instance_url: '',
+      status: 'none',
+      storage_limit_gb: 0,
+      created_at: '',
+      client_email: inv.email,
+      client_name: inv.name || undefined,
+      client_paid: false,
+      is_external: false,
+      invite_status: 'pending',
+    }));
+
+    // Exclude pending clients whose email already appears as accepted
+    const acceptedEmails = new Set([
+      ...(invites || []).map((inv: InviteRecord) => inv.email),
+      ...instances.map(i => i.client_email).filter(Boolean),
+    ]);
+    const filteredPending = pendingClients.filter(p => !acceptedEmails.has(p.client_email));
+
+    return NextResponse.json({ instances: [...instances, ...inviteOnlyClients, ...filteredPending] });
   } catch (error) {
     console.error('Client instances error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -231,8 +315,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Valid client_user_id required' }, { status: 400 });
     }
 
-    // Verify agency owns this instance
-    const { data: instance } = await supabaseAdmin
+    // Verify agency owns this instance (local DB first, then FE API for FE-hosted instances)
+    const { data: localInstance } = await supabaseAdmin
       .from('pay_per_instance_deployments')
       .select('id')
       .eq('id', instance_id)
@@ -240,20 +324,36 @@ export async function POST(req: NextRequest) {
       .is('deleted_at', null)
       .maybeSingle();
 
-    if (!instance) {
-      return NextResponse.json({ error: 'Instance not found or access denied' }, { status: 403 });
+    if (!localInstance) {
+      // Not in local DB — check if it's a FlowEngine-managed instance
+      let isFeOwned = false;
+      try {
+        const portalSettings = await getPortalSettings();
+        const feClient = createFlowEngineClient(portalSettings.flowengine_api_key || undefined);
+        if (feClient) {
+          await feClient.getInstance(instance_id);
+          isFeOwned = true;
+        }
+      } catch {
+        // FE instance not found or FE not configured
+      }
+      if (!isFeOwned) {
+        return NextResponse.json({ error: 'Instance not found or access denied' }, { status: 403 });
+      }
     }
 
-    // Check if already assigned
-    const { data: existing } = await supabaseAdmin
+    // Enforce one-client-per-instance rule
+    const { data: existingAssignment } = await supabaseAdmin
       .from('client_instances')
-      .select('id')
+      .select('id, user_id')
       .eq('instance_id', instance_id)
-      .eq('user_id', client_user_id)
       .maybeSingle();
 
-    if (existing) {
-      return NextResponse.json({ error: 'Client already assigned to this instance' }, { status: 400 });
+    if (existingAssignment) {
+      if (existingAssignment.user_id === client_user_id) {
+        return NextResponse.json({ error: 'Client already assigned to this instance' }, { status: 400 });
+      }
+      return NextResponse.json({ error: 'Instance already has a client assigned. Revoke access first.' }, { status: 400 });
     }
 
     // Create the assignment directly

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPortalSettings } from '@/lib/portalSettings';
+import { getPortalSettings, invalidateSettingsCache } from '@/lib/portalSettings';
 import { createFlowEngineClient } from '@/lib/flowengine';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -22,6 +22,8 @@ export async function GET(req: NextRequest) {
     const user = await authenticate(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    // Always read fresh from DB — avoids stale module-level cache in serverless workers
+    invalidateSettingsCache();
     const settings = await getPortalSettings();
     const apiKey = settings.flowengine_api_key;
 
@@ -66,9 +68,11 @@ export async function POST(req: NextRequest) {
     const providedKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : null;
 
     let apiKey: string | null = providedKey;
+    // Always read fresh from DB for the test — avoids stale module-level cache across workers
+    invalidateSettingsCache();
+    const settings = await getPortalSettings();
 
     if (!apiKey) {
-      const settings = await getPortalSettings();
       apiKey = settings.flowengine_api_key;
     }
 

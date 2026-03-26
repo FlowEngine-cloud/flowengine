@@ -1,13 +1,17 @@
 /**
- * Seeds demo instances for the demo user.
+ * Seeds demo instances for the demo user (and optional demo client user).
  * Run after create-demo-user.mjs:
  *
  *   node scripts/seed-demo-instances.mjs
  *
  * Requires:
- *   SUPABASE_URL       (or defaults to http://kong:8000)
- *   SERVICE_ROLE_KEY   (or SUPABASE_SERVICE_ROLE_KEY)
+ *   SUPABASE_URL                      (or defaults to http://kong:8000)
+ *   SERVICE_ROLE_KEY                  (or SUPABASE_SERVICE_ROLE_KEY)
  *   NEXT_PUBLIC_DEMO_EMAIL
+ *
+ * Optional (enables "View as client →" banner link):
+ *   NEXT_PUBLIC_DEMO_CLIENT_EMAIL
+ *   NEXT_PUBLIC_DEMO_CLIENT_PASSWORD
  */
 
 const supabaseUrl    = process.env.SUPABASE_URL || 'http://kong:8000';
@@ -302,9 +306,99 @@ if (existClient.data?.[0]?.id) {
   }
 }
 
+// ── 7. Create/find demo client user and link to n8n instance ─────────────────
+const clientEmail    = process.env.NEXT_PUBLIC_DEMO_CLIENT_EMAIL;
+const clientPassword = process.env.NEXT_PUBLIC_DEMO_CLIENT_PASSWORD;
+
+let clientUserId = null;
+
+if (!clientEmail || !clientPassword) {
+  console.log('ℹ️   NEXT_PUBLIC_DEMO_CLIENT_EMAIL / _PASSWORD not set — skipping client user setup');
+  console.log('    Set these to enable the "View as client →" banner link.');
+} else if (!n8nInstanceId) {
+  console.log('ℹ️   No n8n instance — skipping client user setup');
+} else {
+  // Find or create the client auth user
+  const findClientRes = await fetch(
+    `${supabaseUrl}/auth/v1/admin/users?email=${encodeURIComponent(clientEmail)}`,
+    { headers }
+  );
+  const findClientData = await findClientRes.json();
+  const existingClientUser = findClientData?.users?.[0];
+
+  if (existingClientUser) {
+    clientUserId = existingClientUser.id;
+    console.log(`✅  Found client user: ${clientEmail} (${clientUserId})`);
+  } else {
+    const createClientRes = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ email: clientEmail, password: clientPassword, email_confirm: true }),
+    });
+    const createClientData = await createClientRes.json();
+    if (createClientRes.ok) {
+      clientUserId = createClientData.id;
+      console.log(`✅  Client user created: ${clientEmail}`);
+    } else if (JSON.stringify(createClientData).includes('already')) {
+      const refetch = await fetch(
+        `${supabaseUrl}/auth/v1/admin/users?email=${encodeURIComponent(clientEmail)}`,
+        { headers }
+      );
+      clientUserId = (await refetch.json())?.users?.[0]?.id;
+      console.log(`ℹ️   Client user already exists: ${clientEmail}`);
+    } else {
+      console.error('❌  Failed to create client user:', JSON.stringify(createClientData));
+    }
+  }
+
+  if (clientUserId) {
+    // Link client user to n8n instance via client_instances
+    const existCI = await rest('GET',
+      `client_instances?instance_id=eq.${n8nInstanceId}&user_id=eq.${clientUserId}&select=id`
+    );
+    if (existCI.data?.[0]?.id) {
+      console.log('ℹ️   Client already linked to n8n instance');
+    } else {
+      const ciRes = await rest('POST', 'client_instances', {
+        instance_id: n8nInstanceId,
+        user_id:     clientUserId,
+        invited_by:  userId,
+      });
+      if (ciRes.ok) {
+        console.log('✅  Client linked to n8n instance');
+      } else if (isDuplicate(ciRes.data)) {
+        console.log('ℹ️   Client already linked to n8n instance');
+      } else {
+        console.error('❌  Failed to link client to instance:', JSON.stringify(ciRes.data));
+      }
+    }
+
+    // Update Acme Corp invite to reference the real client user
+    await rest('PATCH',
+      `client_invites?invited_by=eq.${userId}&name=eq.Acme%20Corp`,
+      { accepted_by: clientUserId, email: clientEmail }
+    );
+    console.log('✅  Acme Corp invite linked to client user');
+  }
+}
+
+// ── 8. Set agency branding (demo logo + business name) ───────────────────────
+const brandingRes = await rest('PATCH', `profiles?id=eq.${userId}`, {
+  agency_logo_url: '/demo-logo.svg',
+  business_name:   'Demo Agency',
+});
+if (brandingRes.ok) {
+  console.log('✅  Agency branding set (logo + business name)');
+} else {
+  console.warn('⚠️   Could not set agency branding:', JSON.stringify(brandingRes.data));
+}
+
 console.log('\nDone! Demo user now has:');
 console.log('  • 1 n8n instance  → "My n8n Automation" (running, api key set)');
 console.log('  • 3 client widgets → Lead Capture Form, Support Chatbot, Sync Trigger');
 console.log('  • 3 workflow templates → Lead Qual, Support Bot, Sheets Sync');
 console.log('  • 1 WhatsApp      → demo-whatsapp (+1 555 123 4567, connected)');
-console.log('  • 1 client        → Acme Corp');
+console.log('  • 1 client        → Acme Corp (linked to n8n instance)');
+if (clientUserId) {
+  console.log(`  • 1 client user   → ${clientEmail} (can log in, sees n8n instance)`);
+}

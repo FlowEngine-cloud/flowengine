@@ -1,46 +1,48 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthContext';
 import { usePortalRoleContext } from '@/app/portal/context';
 import { usePortalInstances } from '@/components/portal/usePortalInstances';
 import SecondaryPanel, { SecondaryPanelSection } from '@/components/portal/SecondaryPanel';
 import SearchableSelect from '@/components/ui/SearchableSelect';
-import { Plus, ExternalLink, Server, Globe } from 'lucide-react';
+import { Plus, ExternalLink, Server, Globe, Link2, AlertTriangle } from 'lucide-react';
 import DeployInstanceModal, { InstanceConfig, ConnectInstanceConfig } from '@/components/DeployInstanceModal';
 import { HostingContext } from './context';
 
 export default function HostingLayout({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
-  const { role, loading: roleLoading } = usePortalRoleContext();
-  const { instances, loading, refetch: refetchInstances } = usePortalInstances();
+  const { role, allowFullAccess, loading: roleLoading } = usePortalRoleContext();
+  const { instances, loading, flowEngineError, refetch: refetchInstances } = usePortalInstances();
   const router = useRouter();
   const pathname = usePathname();
 
-  // Route guard: clients access instances through sidebar, not hosting page
-  useEffect(() => {
-    if (!roleLoading && role === 'client') {
-      router.replace('/portal');
-    }
-  }, [role, roleLoading, router]);
 
   const [deployOpen, setDeployOpen] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [flowEngineConnected, setFlowEngineConnected] = useState(false);
 
   // Check if FlowEngine API key is configured
-  useEffect(() => {
+  const checkFlowEngineConnected = useCallback(() => {
     if (!session?.access_token) return;
     fetch('/api/flowengine/pricing', {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.connected) setFlowEngineConnected(true);
+        setFlowEngineConnected(!!data?.connected);
       })
       .catch(() => {});
   }, [session?.access_token]);
+
+  useEffect(() => { checkFlowEngineConnected(); }, [checkFlowEngineConnected]);
+
+  // Re-check when FlowEngine API key is saved from settings
+  useEffect(() => {
+    window.addEventListener('flowengine-key-updated', checkFlowEngineConnected);
+    return () => window.removeEventListener('flowengine-key-updated', checkFlowEngineConnected);
+  }, [checkFlowEngineConnected]);
 
   // Client filter
   const [clientsByInstance, setClientsByInstance] = useState<Record<string, string>>({});
@@ -50,7 +52,6 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
   // Real-time status map (instanceId -> live status)
   const [liveStatus, setLiveStatus] = useState<Record<string, string>>({});
   const [statusLoading, setStatusLoading] = useState(true);
-  const fetchedRef = useRef(false);
 
   // Fetch client→instance mapping for filter dropdown
   useEffect(() => {
@@ -72,52 +73,67 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
       .catch(() => {});
   }, [session?.access_token]);
 
-  // Fetch live statuses once instances are loaded
+  // Poll live statuses — runs immediately then every 30 s
   useEffect(() => {
-    if (loading || instances.length === 0 || !session?.access_token || fetchedRef.current) return;
-    fetchedRef.current = true;
+    if (loading || instances.length === 0 || !session?.access_token) return;
 
     const token = session.access_token;
-    const activeInstances = instances.filter((i) => !i.is_external && !i.deleted_at && i.status !== 'pending_deploy' && i.service_type);
+    // Skip FlowEngine instances (they poll their own status) and 'other' type (no status endpoint)
+    const activeInstances = instances.filter((i) => !i.is_external && !i.deleted_at && i.status !== 'pending_deploy' && i.service_type && i.platform !== 'flowengine' && i.service_type !== 'other');
 
     if (activeInstances.length === 0) {
       setStatusLoading(false);
       return;
     }
 
-    Promise.allSettled(
-      activeInstances.map(async (inst) => {
-        const isOpenClaw = inst.service_type === 'openclaw';
-        const isDocker = inst.service_type === 'docker' || inst.service_type === 'website';
-        const url = isOpenClaw
-          ? `/api/openclaw/${inst.id}/status`
-          : isDocker
-            ? `/api/docker/status?instanceId=${inst.id}`
-            : `/api/n8n/status?instanceId=${inst.id}`;
-        const res = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return { id: inst.id, status: inst.status };
-        const data = await res.json();
-        const status = (isOpenClaw || isDocker)
-          ? (data.containerStatus || data.instance?.status || inst.status)
-          : (data.status || inst.status);
-        return { id: inst.id, status };
-      })
-    ).then((results) => {
-      const map: Record<string, string> = {};
-      for (const r of results) {
-        if (r.status === 'fulfilled') {
-          map[r.value.id] = r.value.status;
+    const doFetch = () => {
+      Promise.allSettled(
+        activeInstances.map(async (inst) => {
+          const isOpenClaw = inst.service_type === 'openclaw';
+          const isDocker = inst.service_type === 'website';
+          const url = isOpenClaw
+            ? `/api/openclaw/${inst.id}/status`
+            : isDocker
+              ? `/api/docker/status?instanceId=${inst.id}`
+              : `/api/n8n/status?instanceId=${inst.id}`;
+          const res = await fetch(url, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) return { id: inst.id, status: inst.status };
+          const data = await res.json();
+          const status = (isOpenClaw || isDocker)
+            ? (data.containerStatus || data.instance?.status || inst.status)
+            : (data.status || inst.status);
+          return { id: inst.id, status };
+        })
+      ).then((results) => {
+        const map: Record<string, string> = {};
+        for (const r of results) {
+          if (r.status === 'fulfilled') {
+            map[r.value.id] = r.value.status;
+          }
         }
-      }
-      setLiveStatus(map);
-      setStatusLoading(false);
-    });
+        setLiveStatus(prev => ({ ...prev, ...map }));
+        setStatusLoading(false);
+      });
+    };
+
+    doFetch();
+    const intervalId = setInterval(doFetch, 30_000);
+    return () => clearInterval(intervalId);
   }, [loading, instances, session?.access_token]);
 
-  // Route guard: clients access instances through sidebar, not hosting page
-  if (role === 'client') return null;
+  const isClient = role === 'client';
+  const isSimplifiedClient = isClient && !allowFullAccess;
+
+  // Route guard: simplified clients cannot access hosting
+  useEffect(() => {
+    if (!roleLoading && isSimplifiedClient) {
+      router.replace('/portal');
+    }
+  }, [roleLoading, isSimplifiedClient, router]);
+
+  if (isSimplifiedClient) return null;
 
   // Determine selected item from pathname
   const afterHosting = pathname?.split('/portal/hosting/')[1] || '';
@@ -182,7 +198,7 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
       const data = await res.json();
       if (data.success) {
         setDeployOpen(false);
-        try { sessionStorage.removeItem('portal-hosting-instances'); } catch {}
+        try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
         await refetchInstances();
         if (data.instance?.id) {
           router.push(`/portal/hosting/${data.instance.id}`);
@@ -197,11 +213,21 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
     }
   };
 
-  const mapStatus = (inst: { id: string; status: string; is_external?: boolean; deleted_at?: string | null; platform?: string }): 'active' | 'inactive' | 'error' | 'connecting' | 'external' | 'loading' => {
+  const mapStatus = (inst: { id: string; status: string; is_external?: boolean; deleted_at?: string | null; platform?: string; service_type?: string | null }): 'active' | 'inactive' | 'error' | 'connecting' | 'external' | 'loading' => {
     // Deleted or pending instances → show as inactive
     if (inst.deleted_at || inst.status === 'pending_deploy') return 'inactive';
-    // FlowEngine instances use their actual status, not the generic 'external' marker
+    // 'other' type = external link, show as external
+    if (inst.service_type === 'other') return 'external';
+    // True external instances (non-FlowEngine)
     if (inst.is_external && inst.platform !== 'flowengine') return 'external';
+    // FlowEngine Cloud instances — use their API-provided status directly, no local polling
+    if (inst.platform === 'flowengine') {
+      const s = inst.status;
+      if (s === 'running' || s === 'active' || s === 'unhealthy') return 'active';
+      if (s === 'stopped' || s === 'error' || s === 'failed' || s === 'exited') return 'error';
+      if (s === 'deploying' || s === 'provisioning' || s === 'starting' || s === 'restarting' || s === 'updating') return 'connecting';
+      return 'loading';
+    }
     // Check for active fake status (action block) - matches N8nAccountPage behavior
     try {
       const stored = localStorage.getItem('n8n_action_blocks');
@@ -228,10 +254,12 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
       : instances.filter(i => clientsByInstance[i.id] === clientFilter)
     );
 
-    const pendingInstances = filtered.filter(i => !i.is_external && (!i.service_type || i.deleted_at || i.status === 'pending_deploy')).sort((a, b) => a.instance_name.localeCompare(b.instance_name));
+    const KNOWN_TYPES = new Set(['n8n', 'openclaw', 'website', 'other']);
+    const pendingInstances = filtered.filter(i => !i.is_external && (!i.service_type || i.deleted_at || i.status === 'pending_deploy' || !KNOWN_TYPES.has(i.service_type!))).sort((a, b) => a.instance_name.localeCompare(b.instance_name));
     const n8nInstances = filtered.filter(i => i.service_type === 'n8n' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
-    const openclawInstances = filtered.filter(i => !i.is_external && i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
-    const websiteInstances = filtered.filter(i => !i.is_external && (i.service_type === 'docker' || i.service_type === 'website') && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
+    const openclawInstances = filtered.filter(i => i.service_type === 'openclaw' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
+    const websiteInstances = filtered.filter(i => i.service_type === 'website' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
+    const otherInstances = filtered.filter(i => i.service_type === 'other' && !i.deleted_at && i.status !== 'pending_deploy').sort((a, b) => a.instance_name.localeCompare(b.instance_name));
 
     const n8nIcon = (
       <svg fill="currentColor" fillRule="evenodd" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5">
@@ -243,12 +271,17 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
     );
     const websiteIcon = <Globe className="w-5 h-5" />;
 
+    const otherIcon = <Link2 className="w-5 h-5" />;
+
     const mapItem = (i: typeof filtered[0]) => ({
       id: i.id,
       label: i.instance_name,
       sublabel: i.deleted_at ? 'Not deployed' : i.status === 'pending_deploy' ? 'Choose what to deploy' : i.instance_url?.replace('https://', ''),
       status: mapStatus(i),
-      icon: i.service_type === 'openclaw' ? openclawIcon : i.service_type === 'docker' || i.service_type === 'website' ? websiteIcon : n8nIcon,
+      icon: i.service_type === 'openclaw' ? openclawIcon
+          : i.service_type === 'website' ? websiteIcon
+          : i.service_type === 'other' ? otherIcon
+          : n8nIcon,
     });
 
     const mapPendingItem = (i: typeof filtered[0]) => ({
@@ -259,9 +292,6 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
     const n8nSectionIcon = <svg fill="currentColor" fillRule="evenodd" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5"><path clipRule="evenodd" d="M24 8.4c0 1.325-1.102 2.4-2.462 2.4-1.146 0-2.11-.765-2.384-1.8h-3.436c-.602 0-1.115.424-1.214 1.003l-.101.592a2.38 2.38 0 01-.8 1.405c.412.354.704.844.8 1.405l.1.592A1.222 1.222 0 0015.719 15h.975c.273-1.035 1.237-1.8 2.384-1.8 1.36 0 2.461 1.075 2.461 2.4S20.436 18 19.078 18c-1.147 0-2.11-.765-2.384-1.8h-.975c-1.204 0-2.23-.848-2.428-2.005l-.101-.592a1.222 1.222 0 00-1.214-1.003H10.97c-.308.984-1.246 1.7-2.356 1.7-1.11 0-2.048-.716-2.355-1.7H4.817c-.308.984-1.246 1.7-2.355 1.7C1.102 14.3 0 13.225 0 11.9s1.102-2.4 2.462-2.4c1.183 0 2.172.815 2.408 1.9h1.337c.236-1.085 1.225-1.9 2.408-1.9 1.184 0 2.172.815 2.408 1.9h.952c.601 0 1.115-.424 1.213-1.003l.102-.592c.198-1.157 1.225-2.005 2.428-2.005h3.436c.274-1.035 1.238-1.8 2.384-1.8C22.898 6 24 7.075 24 8.4zm-1.23 0c0 .663-.552 1.2-1.232 1.2-.68 0-1.23-.537-1.23-1.2 0-.663.55-1.2 1.23-1.2.68 0 1.231.537 1.231 1.2zM2.461 13.1c.68 0 1.23-.537 1.23-1.2 0-.663-.55-1.2-1.23-1.2-.68 0-1.231.537-1.231 1.2 0 .663.55 1.2 1.23 1.2zm6.153 0c.68 0 1.231-.537 1.231-1.2 0-.663-.55-1.2-1.23-1.2-.68 0-1.231.537-1.231 1.2 0 .663.55 1.2 1.23 1.2zm10.462 3.7c.68 0 1.23-.537 1.23-1.2 0-.663-.55-1.2-1.23-1.2-.68 0-1.23.537-1.23 1.2 0 .663.55 1.2 1.23 1.2z" /></svg>;
     const ocSectionIcon = <img src="/logos/openclaw.png" className="w-3.5 h-3.5 object-contain rounded" alt="" />;
 
-    if (pendingInstances.length > 0) {
-      sections.push({ title: 'Not deployed', icon: <Server className="w-3.5 h-3.5" />, items: pendingInstances.map(mapPendingItem) });
-    }
     if (n8nInstances.length > 0) {
       sections.push({ title: 'n8n', icon: n8nSectionIcon, items: n8nInstances.map(mapItem) });
     }
@@ -270,6 +300,12 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
     }
     if (websiteInstances.length > 0) {
       sections.push({ title: 'Website', icon: <Globe className="w-3.5 h-3.5" />, items: websiteInstances.map(mapItem) });
+    }
+    if (otherInstances.length > 0) {
+      sections.push({ title: 'External', icon: <Link2 className="w-3.5 h-3.5" />, items: otherInstances.map(mapItem) });
+    }
+    if (pendingInstances.length > 0) {
+      sections.push({ title: 'Not deployed', icon: <Server className="w-3.5 h-3.5" />, items: pendingInstances.map(mapPendingItem) });
     }
   }
 
@@ -317,8 +353,17 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
             selectedId={selectedId}
             onSelect={handleSelect}
             searchPlaceholder="Search instances..."
-            action={
+            action={isClient ? undefined : (
               <div className="space-y-2">
+                {flowEngineConnected && flowEngineError && (
+                  <div className="flex items-start gap-1.5 px-2 py-1.5 bg-yellow-900/10 border border-yellow-800/30 rounded-md">
+                    <AlertTriangle className="w-3 h-3 text-yellow-500/70 mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs text-yellow-500/80 font-medium">FlowEngine sync failed</p>
+                      <a href="/portal/settings#flowengine" className="text-xs text-yellow-400/50 hover:text-yellow-400 underline underline-offset-2">Check settings →</a>
+                    </div>
+                  </div>
+                )}
                 <SearchableSelect
                   value={clientFilter}
                   onChange={setClientFilter}
@@ -332,11 +377,11 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
                   Deploy
                 </button>
               </div>
-            }
+            )}
           />
         )}
       </div>
-      <HostingContext.Provider value={{ liveStatus, statusLoading, openDeployModal: () => setDeployOpen(true), refetchInstances, flowEngineConnected }}>
+      <HostingContext.Provider value={{ instances, instancesLoading: loading, liveStatus, statusLoading, openDeployModal: () => setDeployOpen(true), refetchInstances, flowEngineConnected }}>
       <div className="flex-1 overflow-hidden flex flex-col">
         {/* Header bar — breadcrumb */}
         <div className="flex-shrink-0 border-b border-gray-800 px-6 h-[64px] flex items-center gap-3 min-w-0">
@@ -372,6 +417,8 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
           </div>
         )}
 
+        {/* FlowEngine is optional — errors are suppressed; instances simply won't appear if key is missing/invalid */}
+
         {/* Content */}
         {showSkeleton ? (
           <div className="flex-1 overflow-y-auto">
@@ -402,7 +449,7 @@ export default function HostingLayout({ children }: { children: React.ReactNode 
         isDeploying={deploying}
         accessToken={session?.access_token}
         onSuccess={() => {
-          try { sessionStorage.removeItem('portal-hosting-instances'); } catch {}
+          try { sessionStorage.removeItem('portal-hosting-instances-v2'); } catch {}
           refetchInstances();
         }}
       />

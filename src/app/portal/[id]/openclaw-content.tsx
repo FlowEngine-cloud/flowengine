@@ -118,12 +118,18 @@ export function OpenClawContent({ instanceId, externalTab, onTabChange }: Props)
 
   // Fetch instance data
   const fetchInstance = useCallback(async () => {
-    if (!session?.access_token) return;
+    if (!session?.access_token) {
+      setLoadingInstance(false);
+      return;
+    }
     try {
       const res = await fetch(`/api/openclaw/${instanceId}/status`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setLoadingInstance(false);
+        return;
+      }
       const data = await res.json();
       setInstance(data.instance);
       setModel(data.instance?.openclaw_primary_model || '');

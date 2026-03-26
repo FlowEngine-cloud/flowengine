@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     // Atomically accept: only update if still pending
     const { data: invite, error: fetchErr } = await supabaseAdmin
       .from('team_members')
-      .select('id, email, owner_id, status')
+      .select('id, email, owner_id, status, expires_at')
       .eq('token', token)
       .maybeSingle();
 
@@ -76,6 +76,10 @@ export async function POST(req: NextRequest) {
 
     if (invite.status !== 'pending') {
       return NextResponse.json({ error: 'This invitation has already been used' }, { status: 410 });
+    }
+
+    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
+      return NextResponse.json({ error: 'This invitation has expired' }, { status: 410 });
     }
 
     // Email must match

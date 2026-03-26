@@ -3,9 +3,18 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export async function POST(req: NextRequest) {
   try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+    }
+
     const { userId, conversationId, messages, metadata = {}, title } = await req.json();
 
-    // Validate required parameters
     if (!userId || !conversationId || !messages) {
       return NextResponse.json(
         { error: 'userId, conversationId, and messages are required' },
@@ -13,19 +22,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log(
-      `API: Saving conversation ${conversationId} with ${messages.length} messages for user ${userId}`
-    );
+    // Enforce ownership: authenticated user must match requested userId
+    if (user.id !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
-    // Use existing supabaseConversations function
     const { saveConversation } = await import('@/lib/supabaseConversations');
     const result = await saveConversation(userId, conversationId, messages, metadata, title);
-
-    if (result) {
-      console.log(`API: Successfully saved conversation ${conversationId}`);
-    } else {
-      console.log(`API: Failed to save conversation ${conversationId}`);
-    }
 
     return NextResponse.json({ success: result });
   } catch (error) {

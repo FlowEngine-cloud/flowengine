@@ -1,0 +1,257 @@
+# FlowEngine Portal - Production Docker Compose
+# Uses pre-built images from GitHub Container Registry (no local build needed)
+#
+# Quick start:
+#   1. git clone https://github.com/FlowEngine-cloud/FlowEngne.git && cd FlowEngne
+#   2. cp .env.docker .env   ← then edit .env with your domain/secrets
+#   3. docker compose -f docker-compose.prod.yml up -d
+#
+# To update to the latest release:
+#   docker compose -f docker-compose.prod.yml pull portal && \
+#   docker compose -f docker-compose.prod.yml up -d portal
+#
+# Or just let Watchtower handle it automatically (see service below).
+#
+# Pin to a specific version: IMAGE_TAG=v1.2.3 in your .env
+
+services:
+  # ============================================
+  # PostgreSQL - Database
+  # ============================================
+  postgres:
+    image: supabase/postgres:15.8.1.060
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: supabase_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${JWT_SECRET}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/00-init-roles.sh:/docker-entrypoint-initdb.d/00-init-roles.sh
+      - ./migrations/add_portal_settings.sql:/docker-entrypoint-initdb.d/02-auth-compat.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # GoTrue - Authentication
+  # ============================================
+  auth:
+    image: supabase/gotrue:v2.170.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@postgres:5432/postgres?search_path=auth
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
+      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: true
+      GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM:-true}
+      GOTRUE_SMTP_HOST: ${SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_FROM:-noreply@localhost}
+      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-FlowEngine}
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/callback
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/callback
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/callback
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: ${ENABLE_GOOGLE_AUTH:-false}
+      GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_GOOGLE_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: ${API_EXTERNAL_URL:-http://localhost:8000}/auth/v1/callback
+      GOTRUE_EXTERNAL_GITHUB_ENABLED: ${ENABLE_GITHUB_AUTH:-false}
+      GOTRUE_EXTERNAL_GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_GITHUB_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI: ${API_EXTERNAL_URL:-http://localhost:8000}/auth/v1/callback
+    restart: unless-stopped
+
+  # ============================================
+  # PostgREST - RESTful API for Postgres
+  # ============================================
+  rest:
+    image: postgrest/postgrest:v12.2.8
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@postgres:5432/postgres
+      PGRST_DB_SCHEMAS: public,storage,graphql_public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+    restart: unless-stopped
+
+  # ============================================
+  # Supabase Storage - File storage (logos, uploads)
+  # ============================================
+  storage:
+    image: supabase/storage-api:v1.14.3
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@postgres:5432/postgres
+      FILE_SIZE_LIMIT: 52428800
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: stub
+      GLOBAL_S3_BUCKET: stub
+      IS_MULTITENANT: "false"
+    volumes:
+      - storage_data:/var/lib/storage
+    restart: unless-stopped
+
+  # ============================================
+  # Realtime - WebSocket subscriptions
+  # ============================================
+  realtime:
+    image: supabase/realtime:v2.34.18
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: postgres
+      DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
+      DB_ENC_KEY: supabaserealtime
+      API_JWT_SECRET: ${JWT_SECRET}
+      APP_NAME: realtime
+      FLY_ALLOC_ID: fly123
+      FLY_APP_NAME: realtime
+      SECRET_KEY_BASE: ${JWT_SECRET}
+      ERL_AFLAGS: "-proto_dist inet_tcp"
+      ENABLE_TAILSCALE: "false"
+      DNS_NODES: "''"
+      RLIMIT_NOFILE: ""
+    restart: unless-stopped
+
+  # ============================================
+  # Kong - API Gateway (routes all Supabase services)
+  # ============================================
+  kong:
+    image: kong:2.8.1
+    ports:
+      - "${KONG_HTTP_PORT:-8000}:8000"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+    volumes:
+      - ./docker/kong.yml:/var/lib/kong/kong.yml:ro
+    depends_on:
+      - auth
+      - rest
+      - storage
+      - realtime
+    restart: unless-stopped
+
+  # ============================================
+  # DB Migrations - Runs portal schema after GoTrue creates auth.users
+  # ============================================
+  db-migrate:
+    image: supabase/postgres:15.8.1.060
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth:
+        condition: service_started
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./migrations/supabase-schema.sql:/migrations/01-schema.sql
+      - ./migrations/seed.sql:/migrations/99-seed.sql
+    command: >
+      bash -c "
+        sleep 5 &&
+        psql -h postgres -U supabase_admin -d postgres -f /migrations/01-schema.sql || true &&
+        psql -h postgres -U supabase_admin -d postgres -f /migrations/99-seed.sql || true &&
+        psql -h postgres -U supabase_admin -d postgres -c \"NOTIFY pgrst, 'reload schema';\" || true
+      "
+    restart: "no"
+
+  # ============================================
+  # FlowEngine Portal - Next.js Application
+  # Pre-built image from GitHub Container Registry.
+  # To pin a version: set IMAGE_TAG=v1.2.3 in your .env
+  # ============================================
+  portal:
+    image: ghcr.io/flowengine-cloud/flowengne:${IMAGE_TAG:-latest}
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: ${SITE_URL:-http://localhost:3000}
+      SUPABASE_URL: http://kong:8000
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      NEXT_PUBLIC_APP_URL: ${SITE_URL:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kong:
+        condition: service_started
+    ports:
+      - "${PORTAL_PORT:-3000}:3000"
+    restart: unless-stopped
+    networks:
+      - default
+      - coolify
+    labels:
+      # Traefik / Coolify — only active when PORTAL_DOMAIN is set and Traefik is running.
+      - "traefik.enable=${PORTAL_DOMAIN:+true}"
+      - "traefik.http.routers.fe-portal.rule=Host(`${PORTAL_DOMAIN:-localhost}`)"
+      - "traefik.http.routers.fe-portal.entrypoints=http,https"
+      - "traefik.http.routers.fe-portal.tls=true"
+      - "traefik.http.routers.fe-portal.tls.certresolver=letsencrypt"
+      - "traefik.http.services.fe-portal.loadbalancer.server.port=3000"
+      - "traefik.docker.network=coolify"
+      # Watchtower — enable auto-updates for this container
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  # ============================================
+  # Watchtower - Automatic container updates
+  # Checks for new portal image every hour and redeploys automatically.
+  # Remove this service if you prefer manual updates.
+  # ============================================
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # --label-enable: only update containers with the watchtower label above
+    # --interval 3600: check every hour
+    # --cleanup: remove old images after update
+    command: --label-enable --interval 3600 --cleanup
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  storage_data:
+
+networks:
+  coolify:
+    external: true

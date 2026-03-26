@@ -21,16 +21,16 @@ let _liveStatusCache: Record<string, string> | null = null;
 export default function ServicesLayout({ children }: { children: React.ReactNode }) {
   const { user, session, loading: authLoading } = useAuth();
   const { ownerId, loading: teamLoading } = useTeamContext();
-  const { role, loading: roleLoading } = usePortalRoleContext();
+  const { role, allowFullAccess, loading: roleLoading } = usePortalRoleContext();
   const router = useRouter();
   const pathname = usePathname();
 
-  // Route guard: clients cannot access top-level services
+  // Route guard: simplified clients (no full access) cannot access services
   useEffect(() => {
-    if (!roleLoading && role === 'client') {
+    if (!roleLoading && role === 'client' && !allowFullAccess) {
       router.replace('/portal');
     }
-  }, [role, roleLoading, router]);
+  }, [role, allowFullAccess, roleLoading, router]);
 
   const [connections, setConnections] = useState<ServiceConnection[]>(_connectionsCache ?? []);
   const [loading, setLoading] = useState(_connectionsCache === null);
@@ -158,7 +158,7 @@ export default function ServicesLayout({ children }: { children: React.ReactNode
     });
   }, [loading, connections, session?.access_token]);
 
-  if (role === 'client') return null;
+  if (role === 'client' && !allowFullAccess) return null;
 
   const handleSelect = (id: string) => {
     router.push(`/portal/services/${id}`);

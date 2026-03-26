@@ -1,8 +1,12 @@
 'use client';
 
 import { createContext, useContext } from 'react';
+import type { PortalInstance } from '@/components/portal/usePortalInstances';
 
 interface HostingContextValue {
+  /** All portal instances (same data as usePortalInstances) */
+  instances: PortalInstance[];
+  instancesLoading: boolean;
   /** Maps instanceId → live deployment status string */
   liveStatus: Record<string, string>;
   statusLoading: boolean;
@@ -13,5 +17,5 @@ interface HostingContextValue {
   flowEngineConnected: boolean;
 }
 
-export const HostingContext = createContext<HostingContextValue>({ liveStatus: {}, statusLoading: true, openDeployModal: () => {}, refetchInstances: async () => {}, flowEngineConnected: false });
+export const HostingContext = createContext<HostingContextValue>({ instances: [], instancesLoading: true, liveStatus: {}, statusLoading: true, openDeployModal: () => {}, refetchInstances: async () => {}, flowEngineConnected: false });
 export function useHostingContext() { return useContext(HostingContext); }

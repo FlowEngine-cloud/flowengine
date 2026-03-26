@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isValidUUID, checkRateLimit, validateAndSanitizeCSS } from '@/lib/validation';
+import { resolveEffectiveUserId } from '@/lib/teamAccess';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 
@@ -22,6 +23,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ draft: null });
     }
 
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
+
     // Check for specific draft ID in query params
     const { searchParams } = new URL(request.url);
     const draftId = searchParams.get('id');
@@ -39,7 +42,7 @@ export async function GET(request: NextRequest) {
         .from('client_widgets')
         .select('id, widget_type, chatbot_config, form_fields, styles, webhook_url, created_at, updated_at')
         .eq('id', draftId)
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveUserId)
         .eq('is_active', false)
         .maybeSingle();
       draft = data;
@@ -48,7 +51,7 @@ export async function GET(request: NextRequest) {
       const { data } = await supabaseAdmin
         .from('client_widgets')
         .select('id, widget_type, chatbot_config, form_fields, styles, webhook_url, created_at, updated_at')
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveUserId)
         .like('name', `${DRAFT_PREFIX}%`)
         .eq('is_active', false)
         .order('created_at', { ascending: false })
@@ -79,6 +82,8 @@ export async function POST(request: NextRequest) {
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
 
     const body = await request.json();
     const { widget_type = 'chatbot', chatbot_config, form_fields, styles, webhook_url, draftId } = body;
@@ -130,7 +135,7 @@ export async function POST(request: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq('id', draftId)
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveUserId)
         .like('name', `${DRAFT_PREFIX}%`)
         .eq('is_active', false)
         .select()
@@ -164,7 +169,7 @@ export async function POST(request: NextRequest) {
     const { data: draft, error: insertError } = await supabaseAdmin
       .from('client_widgets')
       .insert({
-        user_id: user.id,
+        user_id: effectiveUserId,
         created_by: user.id,
         name: draftName,
         widget_type,
@@ -209,6 +214,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
+
     // Get query params
     const { searchParams } = new URL(request.url);
     const draftId = searchParams.get('id');
@@ -219,7 +226,7 @@ export async function DELETE(request: NextRequest) {
       const { data: deletedDrafts, error: deleteError } = await supabaseAdmin
         .from('client_widgets')
         .delete()
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveUserId)
         .like('name', `${DRAFT_PREFIX}%`)
         .eq('is_active', false)
         .select('id');
@@ -250,7 +257,7 @@ export async function DELETE(request: NextRequest) {
       .from('client_widgets')
       .delete()
       .eq('id', draftId)
-      .eq('user_id', user.id)
+      .eq('user_id', effectiveUserId)
       .like('name', `${DRAFT_PREFIX}%`)
       .eq('is_active', false);
 

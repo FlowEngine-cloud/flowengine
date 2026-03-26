@@ -1,15 +1,28 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+    }
+
     const { userId, conversationId } = await request.json();
 
     if (!userId || !conversationId) {
       return NextResponse.json({ error: 'Missing userId or conversationId' }, { status: 400 });
     }
 
-    console.log(`Loading conversation ${conversationId} for user ${userId}`);
+    // Enforce ownership: authenticated user must match requested userId
+    if (user.id !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const { data, error } = await supabaseAdmin
       .from('conversations')
@@ -20,14 +33,11 @@ export async function POST(request: Request) {
 
     if (error) {
       if (error.code === 'PGRST116') {
-        // No rows found
-        console.log(`No conversation found for ${conversationId}`);
         return NextResponse.json({ messages: [] });
       }
       throw error;
     }
 
-    console.log(`Found conversation with ${data.messages?.length || 0} messages`);
     return NextResponse.json(data);
   } catch (error) {
     console.error('Error loading conversation:', error);

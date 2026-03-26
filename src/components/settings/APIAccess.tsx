@@ -2,7 +2,24 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthContext';
-import { Copy, Check, RefreshCw, Key, AlertTriangle } from 'lucide-react';
+import { Copy, Check, RefreshCw, Key, AlertTriangle, Terminal } from 'lucide-react';
+
+function CopyButton({ text, size = 'sm' }: { text: string; size?: 'xs' | 'sm' }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  const cls = size === 'xs'
+    ? 'flex items-center gap-1 px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded text-xs font-medium transition-colors border border-gray-700'
+    : 'flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded-md text-xs font-medium transition-colors border border-gray-700';
+  return (
+    <button onClick={copy} className={cls}>
+      {copied ? <><Check className="w-3 h-3 text-green-400" /><span className="text-green-400">Copied</span></> : <><Copy className="w-3 h-3" />Copy</>}
+    </button>
+  );
+}
 
 export function APIAccess() {
   const { user } = useAuth();
@@ -11,16 +28,16 @@ export function APIAccess() {
   const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [baseUrl, setBaseUrl] = useState('https://your-portal-url');
 
-  // Generate flow
   const [confirming, setConfirming] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [newApiKey, setNewApiKey] = useState<string>('');
   const [showNewKeyModal, setShowNewKeyModal] = useState(false);
-
-  // Copy states
   const [keyCopied, setKeyCopied] = useState(false);
   const [mcpCopied, setMcpCopied] = useState(false);
+
+  useEffect(() => { setBaseUrl(window.location.origin); }, []);
 
   const loadAPIKey = useCallback(async () => {
     if (!user) return;
@@ -68,7 +85,7 @@ export function APIAccess() {
     }
   };
 
-  const copy = (text: string, setCopied: (v: boolean) => void) => {
+  const copyText = (text: string, setCopied: (v: boolean) => void) => {
     navigator.clipboard.writeText(text).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -88,207 +105,225 @@ export function APIAccess() {
     return `${Math.floor(s / 86400)}d ago`;
   };
 
-  const mcpConfig = (apiKeyValue: string) => JSON.stringify({
-    flowengine: {
-      command: 'npx',
-      args: ['-y', 'flowengine-mcp-app'],
-      env: {
-        FLOWENGINE_API_KEY: apiKeyValue,
-        PORTAL_BASE_URL: typeof window !== 'undefined' ? window.location.origin : 'https://your-portal-url',
+  const mcpConfig = (key: string) => JSON.stringify({
+    mcpServers: {
+      flowengine: {
+        command: 'npx',
+        args: ['-y', 'flowengine-mcp-app'],
+        env: {
+          FLOWENGINE_API_KEY: key,
+          PORTAL_BASE_URL: baseUrl,
+        },
       },
     },
   }, null, 2);
 
   if (loading) {
     return (
-      <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 animate-pulse">
-        <div className="h-5 bg-gray-800 rounded w-1/4 mb-3" />
-        <div className="h-4 bg-gray-800 rounded w-2/3" />
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 animate-pulse">
+        <div className="h-4 bg-gray-800 rounded w-1/4 mb-6" />
+        <div className="h-3 bg-gray-800 rounded w-2/3 mb-2" />
+        <div className="h-3 bg-gray-800 rounded w-1/2" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* API Key card */}
-      <div id="api-access" className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 scroll-mt-24">
-        <div className="flex items-start justify-between mb-1">
-          <h3 className="text-white text-lg font-medium">API Key</h3>
-          {keyPrefix && (
-            <span className="text-xs text-gray-500">Created {formatDate(createdAt)}</span>
-          )}
+    <div id="api-access" className="scroll-mt-24">
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden">
+
+        {/* ── Header ── */}
+        <div className="px-6 py-5 border-b border-gray-800">
+          <h3 className="text-white text-base font-semibold">API Access & MCP</h3>
+          <p className="text-gray-500 text-sm mt-0.5">
+            Authenticate REST requests and connect AI assistants via MCP.
+          </p>
         </div>
-        <p className="text-gray-400 text-sm mb-6">
-          Authenticate API requests and MCP tools with your personal API key.
-        </p>
 
         {error && (
-          <div className="flex items-center gap-2 bg-red-900/20 border border-red-700/50 rounded-lg p-3 mb-4">
+          <div className="mx-6 mt-4 flex items-center gap-2 bg-red-900/20 border border-red-700/50 rounded-lg p-3">
             <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
             <p className="text-red-400 text-xs">{error}</p>
           </div>
         )}
 
-        {keyPrefix ? (
-          <div className="space-y-4">
-            <div className="bg-gray-800/40 border border-gray-700/50 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Key className="w-3.5 h-3.5 text-gray-400" />
-                  <span className="text-gray-300 text-sm font-medium">Your API Key</span>
-                </div>
-                <span className="text-gray-500 text-xs">Last used: {formatTimeAgo(lastUsedAt)}</span>
-              </div>
-              <code className="text-white font-mono text-sm block mb-1">{keyPrefix}</code>
-              <p className="text-gray-500 text-xs">
-                The full key is only shown once at generation. Regenerate to get a new key.
-              </p>
-            </div>
-
-            {/* Inline confirm before regenerating */}
-            {confirming ? (
-              <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-4">
-                <p className="text-yellow-300 text-sm font-medium mb-1">Regenerate your API key?</p>
-                <p className="text-gray-400 text-xs mb-4">
-                  Your current key will stop working immediately. Any integrations using it will break.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleGenerateKey}
-                    disabled={regenerating}
-                    className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs rounded font-medium disabled:opacity-50 transition-colors"
-                  >
-                    {regenerating ? 'Regenerating...' : 'Yes, regenerate'}
-                  </button>
-                  <button
-                    onClick={() => setConfirming(false)}
-                    className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded font-medium transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setConfirming(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded font-medium transition-colors border border-gray-700"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Regenerate key
-              </button>
-            )}
-
-            <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3">
-              <p className="text-yellow-400 text-xs font-medium mb-1">Keep it secret</p>
-              <p className="text-gray-400 text-xs">
-                Never share your key or commit it to version control. Treat it like a password.
-              </p>
-            </div>
+        {/* ── Base URL ── */}
+        <div className="px-6 py-4 border-b border-gray-800/60">
+          <p className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2">Base URL</p>
+          <div className="flex items-center gap-2 bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2">
+            <code className="text-gray-300 text-sm font-mono flex-1 truncate">{baseUrl}</code>
+            <CopyButton text={baseUrl} size="xs" />
           </div>
-        ) : (
-          <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-6 text-center">
-            <Key className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm mb-1">No API key yet</p>
-            <p className="text-gray-500 text-xs mb-5">Generate a key to start using the API and MCP tools.</p>
-            <button
-              onClick={handleGenerateKey}
-              disabled={regenerating}
-              className="px-4 py-2 bg-white hover:bg-gray-100 text-black text-sm rounded font-medium disabled:opacity-50 transition-colors"
-            >
-              {regenerating ? 'Generating...' : 'Generate API Key'}
-            </button>
+        </div>
+
+        {/* ── API Key ── */}
+        <div className="px-6 py-4 border-b border-gray-800/60">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-gray-500 text-xs font-medium uppercase tracking-wider">API Key</p>
+            {keyPrefix && (
+              <span className="text-gray-600 text-xs">Created {formatDate(createdAt)}</span>
+            )}
+          </div>
+
+          {keyPrefix ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2">
+                <Key className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />
+                <code className="text-gray-300 text-sm font-mono flex-1">{keyPrefix}</code>
+                <span className="text-gray-600 text-xs whitespace-nowrap">Used {formatTimeAgo(lastUsedAt)}</span>
+              </div>
+              <p className="text-gray-600 text-xs">
+                Full key shown once at generation. Regenerate to get a new one.
+              </p>
+
+              {confirming ? (
+                <div className="bg-yellow-900/15 border border-yellow-700/40 rounded-lg p-3">
+                  <p className="text-yellow-300 text-xs font-medium mb-1">This will invalidate your current key.</p>
+                  <p className="text-gray-400 text-xs mb-3">Any integrations using it will stop working immediately.</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleGenerateKey}
+                      disabled={regenerating}
+                      className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs rounded font-medium disabled:opacity-50 transition-colors"
+                    >
+                      {regenerating ? 'Regenerating…' : 'Yes, regenerate'}
+                    </button>
+                    <button
+                      onClick={() => setConfirming(false)}
+                      className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded font-medium transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirming(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-800/60 hover:bg-gray-800 text-gray-400 hover:text-white rounded-md font-medium transition-colors border border-gray-700/60"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Regenerate key
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-4 bg-gray-950/40 border border-gray-800 rounded-lg px-4 py-4">
+              <Key className="w-8 h-8 text-gray-700 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-gray-400 text-sm font-medium">No API key</p>
+                <p className="text-gray-600 text-xs mt-0.5">Generate a key to access the REST API and MCP tools.</p>
+              </div>
+              <button
+                onClick={handleGenerateKey}
+                disabled={regenerating}
+                className="px-4 py-2 bg-white hover:bg-gray-100 text-black text-xs rounded-md font-semibold disabled:opacity-50 transition-colors whitespace-nowrap"
+              >
+                {regenerating ? 'Generating…' : 'Generate Key'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── MCP Config (only when key exists) ── */}
+        {keyPrefix && (
+          <div className="px-6 py-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Terminal className="w-3.5 h-3.5 text-gray-500" />
+              <p className="text-gray-500 text-xs font-medium uppercase tracking-wider">MCP Server</p>
+            </div>
+            <p className="text-gray-500 text-sm mb-3">
+              Add to your Claude Desktop or Cursor <code className="text-gray-400 bg-gray-800/60 px-1 py-0.5 rounded text-xs">mcp.json</code> to control your portal from any AI assistant.
+            </p>
+
+            <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800/80">
+                <span className="text-gray-600 text-xs font-mono">mcp.json</span>
+                <button
+                  onClick={() => copyText(mcpConfig('YOUR_API_KEY_HERE'), setMcpCopied)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded text-xs font-medium transition-colors border border-gray-700"
+                >
+                  {mcpCopied ? <><Check className="w-3 h-3 text-green-400" /><span className="text-green-400">Copied</span></> : <><Copy className="w-3 h-3" />Copy</>}
+                </button>
+              </div>
+              <pre className="p-4 text-xs text-gray-300 overflow-x-auto font-mono leading-relaxed">{`{
+  "mcpServers": {
+    "flowengine": {
+      "command": "npx",
+      "args": ["-y", "flowengine-mcp-app"],
+      "env": {
+        "FLOWENGINE_API_KEY": "${keyPrefix}...",
+        "PORTAL_BASE_URL": "${baseUrl}"
+      }
+    }
+  }
+}`}</pre>
+            </div>
+            <p className="text-gray-600 text-xs mt-2">
+              Replace <code className="text-gray-500">{keyPrefix}...</code> with your full key. Regenerate above to reveal it.
+            </p>
           </div>
         )}
       </div>
 
-      {/* MCP Server card — only shown once a key exists */}
-      {keyPrefix && (
-        <div id="mcp" className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 scroll-mt-24">
-          <h3 className="text-white text-lg font-medium mb-1">MCP Server</h3>
-          <p className="text-gray-400 text-sm mb-5">
-            Add this to your AI assistant's MCP config (Claude Desktop, Cursor, etc.) to manage your portal from any AI chat.
-          </p>
-
-          <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
-              <span className="text-gray-500 text-xs font-mono">mcp-config.json</span>
-              <button
-                onClick={() => copy(mcpConfig('YOUR_API_KEY_HERE'), setMcpCopied)}
-                className="flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-gray-100 text-black rounded text-xs font-medium transition-colors"
-              >
-                {mcpCopied ? <><Check className="w-3 h-3" /> Copied!</> : <><Copy className="w-3 h-3" /> Copy</>}
-              </button>
-            </div>
-            <pre className="p-4 text-xs text-gray-300 overflow-x-auto font-mono">{`"flowengine": {
-  "command": "npx",
-  "args": ["-y", "flowengine-mcp-app"],
-  "env": {
-    "FLOWENGINE_API_KEY": "YOUR_API_KEY_HERE",
-    "PORTAL_BASE_URL": "${typeof window !== 'undefined' ? window.location.origin : 'https://your-portal-url'}"
-  }
-}`}</pre>
-          </div>
-          <p className="text-gray-500 text-xs mt-3">
-            Replace <code className="text-gray-400">YOUR_API_KEY_HERE</code> with your actual key. Regenerate above to get your full key.
-          </p>
-        </div>
-      )}
-
-      {/* New Key Modal */}
+      {/* ── New Key Modal ── */}
       {showNewKeyModal && newApiKey && (
         <div
           className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
           onClick={(e) => { if (e.target === e.currentTarget) { setShowNewKeyModal(false); setNewApiKey(''); } }}
         >
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-lg w-full shadow-2xl">
-            <div className="flex items-center gap-2 mb-1">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-lg w-full shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
               <div className="w-8 h-8 rounded-full bg-green-900/40 border border-green-700/50 flex items-center justify-center flex-shrink-0">
                 <Check className="w-4 h-4 text-green-400" />
               </div>
-              <h3 className="text-white text-lg font-medium">API Key Generated</h3>
+              <div>
+                <h3 className="text-white text-base font-semibold">API Key Generated</h3>
+                <p className="text-gray-500 text-xs">Save it now — you won't see the full key again.</p>
+              </div>
             </div>
 
-            <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3 my-4">
-              <p className="text-yellow-400 text-xs font-medium mb-1">Save this key now</p>
-              <p className="text-gray-300 text-xs">
-                This is the only time you'll see the full key. Store it in a password manager or environment variable. We only keep a hash of it.
-              </p>
-            </div>
-
-            <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-3 mb-4">
+            {/* Key */}
+            <div className="bg-gray-950 border border-gray-800 rounded-lg p-3 mb-4">
+              <p className="text-gray-500 text-xs mb-2 font-medium">Your API Key</p>
               <div className="flex items-center gap-2">
                 <code className="text-green-400 text-sm break-all select-all flex-1 font-mono">{newApiKey}</code>
                 <button
-                  onClick={() => copy(newApiKey, setKeyCopied)}
-                  className="px-3 py-1.5 text-xs bg-white hover:bg-gray-200 text-black rounded font-medium whitespace-nowrap transition-colors"
+                  onClick={() => copyText(newApiKey, setKeyCopied)}
+                  className="px-3 py-1.5 text-xs bg-white hover:bg-gray-200 text-black rounded font-medium whitespace-nowrap transition-colors flex-shrink-0"
                 >
                   {keyCopied ? '✓ Copied' : 'Copy'}
                 </button>
               </div>
             </div>
 
-            <div className="bg-gray-800/40 border border-gray-700/50 rounded-lg p-3 mb-5">
-              <p className="text-gray-400 text-xs mb-1.5 font-medium">Quick test</p>
-              <code className="text-gray-300 text-xs block font-mono whitespace-pre-wrap break-all">
-                {`curl ${typeof window !== 'undefined' ? window.location.origin : 'https://your-portal-url'}/api/v1/me \\
-  -H "Authorization: Bearer ${newApiKey}"`}
+            {/* MCP Config */}
+            <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden mb-4">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800">
+                <span className="text-gray-600 text-xs font-mono">mcp.json (with your key)</span>
+                <button
+                  onClick={() => copyText(mcpConfig(newApiKey), setMcpCopied)}
+                  className="flex items-center gap-1 px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded text-xs font-medium transition-colors border border-gray-700"
+                >
+                  {mcpCopied ? <><Check className="w-3 h-3 text-green-400" /><span className="text-green-400">Copied</span></> : <><Copy className="w-3 h-3" />Copy</>}
+                </button>
+              </div>
+              <pre className="p-3 text-xs text-gray-300 overflow-x-auto font-mono leading-relaxed">{mcpConfig(newApiKey)}</pre>
+            </div>
+
+            {/* Quick test */}
+            <div className="bg-gray-950 border border-gray-800 rounded-lg p-3 mb-5">
+              <p className="text-gray-500 text-xs mb-1.5 font-medium">Quick test</p>
+              <code className="text-gray-400 text-xs block font-mono break-all">
+                {`curl ${baseUrl}/api/v1/me \\\n  -H "Authorization: Bearer ${newApiKey}"`}
               </code>
             </div>
 
-            <div className="flex gap-3">
-              <button
-                onClick={() => copy(mcpConfig(newApiKey), setMcpCopied)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-gray-100 text-black rounded font-medium text-sm transition-colors"
-              >
-                {mcpCopied ? <><Check className="w-3.5 h-3.5" /> Copied MCP Config</> : <><Copy className="w-3.5 h-3.5" /> Copy MCP Config</>}
-              </button>
-              <button
-                onClick={() => { setShowNewKeyModal(false); setNewApiKey(''); }}
-                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded border border-gray-700 font-medium text-sm transition-colors"
-              >
-                Done
-              </button>
-            </div>
+            <button
+              onClick={() => { setShowNewKeyModal(false); setNewApiKey(''); }}
+              className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg border border-gray-700 font-medium text-sm transition-colors"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}
