@@ -9,9 +9,10 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
 import {
-  Loader2, Save,
+  Loader2, Save, Server,
   Stethoscope, Copy, Check, Eye, EyeOff,
   ExternalLink, RefreshCw, ChevronDown,
   Brain, Radio, KeyRound, Activity,
@@ -53,9 +54,10 @@ interface Props {
   instanceId: string;
   externalTab?: string;
   onTabChange?: (tab: string) => void;
+  fallbackInstance?: { id: string; instance_name: string; instance_url?: string; status?: string };
 }
 
-export function OpenClawContent({ instanceId, externalTab, onTabChange }: Props) {
+export function OpenClawContent({ instanceId, externalTab, onTabChange, fallbackInstance }: Props) {
   const { session } = useAuth();
   const [instance, setInstance] = useState<OpenClawInstanceData | null>(null);
   const [loadingInstance, setLoadingInstance] = useState(true);
@@ -228,6 +230,35 @@ export function OpenClawContent({ instanceId, externalTab, onTabChange }: Props)
   }
 
   if (!instance) {
+    if (fallbackInstance) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-6 p-8 min-h-[300px]">
+          <div className="w-16 h-16 rounded-2xl bg-gray-800/30 flex items-center justify-center">
+            <Server className="w-8 h-8 text-gray-500" />
+          </div>
+          <div className="text-center">
+            <p className="text-white font-semibold text-lg mb-1">{fallbackInstance.instance_name}</p>
+            {fallbackInstance.instance_url && (
+              <a
+                href={fallbackInstance.instance_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 justify-center"
+              >
+                {fallbackInstance.instance_url.replace('https://', '')}
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+          </div>
+          <Link
+            href={`/portal/hosting/${fallbackInstance.id}`}
+            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg transition-colors"
+          >
+            Manage Instance
+          </Link>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center justify-center py-20">
         <p className="text-white/60 text-sm">Instance not found.</p>

@@ -921,9 +921,9 @@ function PortalPageContent() {
                 const st = selectedInst?.service_type;
                 const isFlowEngine = (selectedInst as any)?.platform === 'flowengine';
                 if (st === 'openclaw') {
-                  return <OpenClawContent key={instanceFilter} instanceId={instanceFilter} externalTab={activePortalTab} onTabChange={setActivePortalTab} />;
+                  return <OpenClawContent key={instanceFilter} instanceId={instanceFilter} externalTab={activePortalTab} onTabChange={setActivePortalTab} fallbackInstance={selectedInst} />;
                 }
-                if (st === 'website') {
+                if (st === 'website' || st === 'other') {
                   return (
                     <div key={instanceFilter} className="flex-1 flex flex-col items-center justify-center gap-6 p-8">
                       <div className="w-16 h-16 rounded-2xl bg-gray-800/30 flex items-center justify-center">
@@ -952,7 +952,7 @@ function PortalPageContent() {
                     </div>
                   );
                 }
-                return <ClientPanelContent key={instanceFilter} instanceId={instanceFilter} portalEmbedded externalTab={activePortalTab} onTabChange={setActivePortalTab} isFlowEngine={isFlowEngine} />;
+                return <ClientPanelContent key={instanceFilter} instanceId={instanceFilter} portalEmbedded externalTab={activePortalTab} onTabChange={setActivePortalTab} isFlowEngine={isFlowEngine} fallbackInstance={selectedInst} />;
               })()}
             </div>
           </div>
