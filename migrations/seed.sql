@@ -4,11 +4,11 @@
 -- Sample workflow templates (only insert if no templates exist yet)
 INSERT INTO workflow_templates (name, description, category, is_public, workflow_json)
 SELECT name, description, category, is_public, workflow_json FROM (VALUES
-  ('Welcome Email Sequence', 'Send a welcome email when a new user signs up, followed by an onboarding series.', 'Email', true, '{"nodes": [], "connections": {}}'),
-  ('Slack Notification Bot', 'Post formatted notifications to Slack channels based on webhook triggers.', 'Communication', true, '{"nodes": [], "connections": {}}'),
-  ('Lead Capture Form', 'Capture leads from a web form and add them to your CRM automatically.', 'Sales', true, '{"nodes": [], "connections": {}}'),
-  ('Daily Report Generator', 'Generate and email a daily summary report from your database.', 'Reporting', true, '{"nodes": [], "connections": {}}'),
-  ('Invoice Automation', 'Create and send invoices automatically when a project milestone is completed.', 'Finance', true, '{"nodes": [], "connections": {}}')
+  ('Welcome Email Sequence', 'Send a welcome email when a new user signs up, followed by an onboarding series.', 'Email', true, '{"nodes": [], "connections": {}}'::jsonb),
+  ('Slack Notification Bot', 'Post formatted notifications to Slack channels based on webhook triggers.', 'Communication', true, '{"nodes": [], "connections": {}}'::jsonb),
+  ('Lead Capture Form', 'Capture leads from a web form and add them to your CRM automatically.', 'Sales', true, '{"nodes": [], "connections": {}}'::jsonb),
+  ('Daily Report Generator', 'Generate and email a daily summary report from your database.', 'Reporting', true, '{"nodes": [], "connections": {}}'::jsonb),
+  ('Invoice Automation', 'Create and send invoices automatically when a project milestone is completed.', 'Finance', true, '{"nodes": [], "connections": {}}'::jsonb)
 ) AS v(name, description, category, is_public, workflow_json)
 WHERE NOT EXISTS (SELECT 1 FROM workflow_templates WHERE is_public = true AND team_id IS NULL);
 
