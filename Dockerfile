@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM --platform=$BUILDPLATFORM node:20-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -45,7 +45,8 @@ ENV SUPABASE_SERVICE_ROLE_KEY=placeholder
 RUN npm run build
 
 # Production image, copy all the files and run next
-FROM base AS runner
+# Uses $TARGETPLATFORM (not base) so the final image is the correct architecture
+FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
