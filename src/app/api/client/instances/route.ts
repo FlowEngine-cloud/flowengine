@@ -1,0 +1,620 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { isValidUUID, checkRateLimit, isPlaceholderEmail } from '@/lib/validation';
+import { resolveEffectiveUserId } from '@/lib/teamAccess';
+import { getEffectiveOwnerId, canWrite } from '@/lib/teamUtils';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getPortalSettings } from '@/lib/portalSettings';
+import { createFlowEngineClient } from '@/lib/flowengine';
+
+
+// GET: List client instances for an agency
+export async function GET(req: NextRequest) {
+  try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+    }
+
+    // Resolve effective user ID for team members
+    const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
+
+    // User must be logged in (auth already checked above)
+
+    // Get client instances from TWO sources:
+    // 1. client_instances table - where agency invited client
+    // 2. pay_per_instance_deployments - where client invited agency (invited_by_user_id)
+    const [{ data: clientInstances, error }, { data: clientInvitedInstances }] = await Promise.all([
+      supabaseAdmin
+        .from('client_instances')
+        .select(`
+          *,
+          instance:pay_per_instance_deployments(
+            id,
+            instance_name,
+            instance_url,
+            status,
+            storage_limit_gb,
+            created_at,
+            user_id,
+            is_external,
+            service_type,
+            deleted_at
+          )
+        `)
+        .eq('invited_by', effectiveUserId),
+      // Instances where client invited this agency
+      supabaseAdmin
+        .from('pay_per_instance_deployments')
+        .select('id, instance_name, instance_url, status, storage_limit_gb, created_at, user_id, is_external, service_type')
+        .eq('invited_by_user_id', effectiveUserId)
+        .is('deleted_at', null)
+    ]);
+
+    if (error) {
+      console.error('Failed to fetch client instances:', error);
+      return NextResponse.json({ error: 'Failed to fetch client instances' }, { status: 500 });
+    }
+
+    // Get client emails for all client user IDs (both sources)
+    const allClientUserIds = new Set<string>();
+    (clientInvitedInstances || []).forEach(i => { if (i.user_id) allClientUserIds.add(i.user_id); });
+    (clientInstances || []).forEach((ci: { user_id: string }) => { if (ci.user_id) allClientUserIds.add(ci.user_id); });
+    let clientProfiles: Record<string, string> = {};
+    if (allClientUserIds.size > 0) {
+      const { data: profiles } = await supabaseAdmin
+        .from('profiles')
+        .select('id, email')
+        .in('id', Array.from(allClientUserIds));
+      profiles?.forEach(p => {
+        clientProfiles[p.id] = p.email;
+      });
+    }
+
+    // Get all invites: accepted (for linking) + pending (to show in client list)
+    const [{ data: invites }, { data: pendingInvites }] = await Promise.all([
+      supabaseAdmin
+        .from('client_invites')
+        .select('id, email, name, accepted_by, linked_instance_ids')
+        .eq('invited_by', effectiveUserId)
+        .eq('status', 'accepted'),
+      supabaseAdmin
+        .from('client_invites')
+        .select('id, email, name, linked_instance_ids')
+        .eq('invited_by', effectiveUserId)
+        .eq('status', 'pending'),
+    ]);
+
+    // Define types for the data structures
+    type InviteRecord = {
+      id: string;
+      email: string;
+      name: string | null;
+      accepted_by: string | null;
+      linked_instance_ids: string[] | null;
+    };
+
+    type ClientInstanceRecord = {
+      instance_id: string;
+      user_id: string;
+      instance: {
+        id: string;
+        instance_name: string;
+        instance_url: string;
+        status: string;
+        storage_limit_gb: number;
+        created_at: string;
+        is_external?: boolean;
+        service_type?: string | null;
+        deleted_at?: string | null;
+      } | null;
+    };
+
+    // Create a map of user_id -> invite for quick lookup
+    const inviteByUserId = new Map<string, { id: string; email: string }>();
+    (invites || []).forEach((inv: InviteRecord) => {
+      if (inv.accepted_by) {
+        inviteByUserId.set(inv.accepted_by, { id: inv.id, email: inv.email });
+      }
+    });
+
+    // Build a map of invite_id -> name for invited clients
+    const inviteNameById = new Map<string, string | null>();
+    (invites || []).forEach((inv: InviteRecord) => {
+      inviteNameById.set(inv.id, inv.name);
+    });
+
+    // Transform agency-invited instances.
+    // Records with no local instance data are FE-hosted instances (not in pay_per_instance_deployments).
+    const withLocalInstance = (clientInstances || []).filter((ci: ClientInstanceRecord) => ci.instance);
+    const withoutLocalInstance = (clientInstances || []).filter((ci: ClientInstanceRecord) => !ci.instance);
+
+    // For FE-hosted assigned instances: fetch details from FlowEngine API
+    const feInstanceMap = new Map<string, any>();
+    if (withoutLocalInstance.length > 0) {
+      try {
+        const portalSettings = await getPortalSettings();
+        const feClient = createFlowEngineClient(portalSettings.flowengine_api_key || undefined);
+        if (feClient) {
+          const feInstances = await feClient.listInstances();
+          feInstances.forEach((i: any) => feInstanceMap.set(i.id, i));
+        }
+      } catch (err) {
+        console.warn('[GET client/instances] FE instance fetch failed:', err);
+      }
+    }
+
+    const agencyInvitedMapped = [
+      // Local (OSS-hosted) instances
+      ...withLocalInstance.map((ci: ClientInstanceRecord) => {
+        const invite = inviteByUserId.get(ci.user_id);
+        const isDeleted = !!ci.instance?.deleted_at;
+        return {
+          instance_id: ci.instance_id,
+          user_id: ci.user_id,
+          invite_id: invite?.id,
+          instance_name: ci.instance?.instance_name,
+          instance_url: ci.instance?.instance_url,
+          status: isDeleted ? 'deleted' : ci.instance?.status,
+          storage_limit_gb: ci.instance?.storage_limit_gb,
+          created_at: ci.instance?.created_at,
+          client_email: invite?.email || clientProfiles[ci.user_id] || undefined,
+          client_name: invite?.id ? (inviteNameById.get(invite.id) || undefined) : undefined,
+          client_paid: false,
+          is_external: ci.instance?.is_external || false,
+          service_type: ci.instance?.service_type || null,
+          invite_status: 'accepted',
+        };
+      }),
+      // FlowEngine-hosted instances (details fetched from FE API)
+      ...withoutLocalInstance
+        .filter((ci: ClientInstanceRecord) => feInstanceMap.has(ci.instance_id))
+        .map((ci: ClientInstanceRecord) => {
+          const feInst = feInstanceMap.get(ci.instance_id);
+          const invite = inviteByUserId.get(ci.user_id);
+          return {
+            instance_id: ci.instance_id,
+            user_id: ci.user_id,
+            invite_id: invite?.id,
+            instance_name: feInst.instance_name,
+            instance_url: feInst.instance_url,
+            status: feInst.status,
+            storage_limit_gb: feInst.storage_gb,
+            created_at: feInst.created_at,
+            client_email: invite?.email || clientProfiles[ci.user_id] || undefined,
+            client_name: invite?.id ? (inviteNameById.get(invite.id) || undefined) : undefined,
+            client_paid: false,
+            is_external: false,
+            service_type: feInst.service_type || 'n8n',
+            invite_status: 'accepted',
+            platform: 'flowengine' as const,
+          };
+        }),
+    ];
+
+    // Transform client-invited instances (client paid, invited agency)
+    const clientInvitedMapped = (clientInvitedInstances || []).map(inst => ({
+      instance_id: inst.id,
+      user_id: inst.user_id,
+      invite_id: undefined,
+      instance_name: inst.instance_name,
+      instance_url: inst.instance_url,
+      status: inst.status,
+      storage_limit_gb: inst.storage_limit_gb,
+      created_at: inst.created_at,
+      client_email: clientProfiles[inst.user_id] || undefined,
+      client_name: undefined,
+      client_paid: true,
+      is_external: inst.is_external || false,
+      service_type: (inst as any).service_type || null,
+      invite_status: 'accepted',
+    }));
+
+    // Merge both sources
+    const agencyInstanceIds = new Set(agencyInvitedMapped.map(i => i.instance_id));
+    const instances = [
+      ...agencyInvitedMapped,
+      ...clientInvitedMapped.filter(i => !agencyInstanceIds.has(i.instance_id)),
+    ];
+
+    // Include accepted invites that have no instances yet (so they still appear in the client list)
+    // Also include name-only clients (accepted_by = null, placeholder email)
+    const usersWithInstances = new Set(instances.map(i => i.user_id));
+    const isNameOnlyInvite = (inv: InviteRecord) =>
+      !inv.accepted_by && isPlaceholderEmail(inv.email);
+
+    // Collect linked_instance_ids from accepted name-only invites (accepted_by=null)
+    // so we can surface the pre-assigned instances on the client detail page.
+    const acceptedLinkedInstanceIds = new Set<string>();
+    (invites || []).forEach((inv: InviteRecord) => {
+      if (!inv.accepted_by) {
+        (inv.linked_instance_ids || []).forEach(id => acceptedLinkedInstanceIds.add(id));
+      }
+    });
+
+    // Batch-fetch instance details for accepted name-only invite linked instances
+    const acceptedLinkedInstanceMap = new Map<string, {
+      id: string;
+      instance_name: string;
+      instance_url: string;
+      status: string;
+      storage_limit_gb: number;
+      created_at: string;
+      is_external: boolean | null;
+      service_type: string | null;
+    }>();
+    if (acceptedLinkedInstanceIds.size > 0) {
+      const { data: acceptedLinkedInstances } = await supabaseAdmin
+        .from('pay_per_instance_deployments')
+        .select('id, instance_name, instance_url, status, storage_limit_gb, created_at, is_external, service_type')
+        .in('id', Array.from(acceptedLinkedInstanceIds))
+        .or(`user_id.eq.${effectiveUserId},invited_by_user_id.eq.${effectiveUserId}`)
+        .is('deleted_at', null);
+      (acceptedLinkedInstances || []).forEach(inst => acceptedLinkedInstanceMap.set(inst.id, inst));
+    }
+
+    const inviteOnlyClients = (invites || [])
+      .filter((inv: InviteRecord) =>
+        isNameOnlyInvite(inv) ||
+        !inv.accepted_by ||
+        (inv.accepted_by && !usersWithInstances.has(inv.accepted_by))
+      )
+      .flatMap((inv: InviteRecord) => {
+        const isNameOnly = isNameOnlyInvite(inv) || (!inv.accepted_by);
+        const syntheticUserId = isNameOnly ? `ni_${inv.id}` : inv.accepted_by!;
+
+        // For name-only invites with pre-assigned instances, emit real instance rows
+        if (!inv.accepted_by) {
+          const linkedIds = (inv.linked_instance_ids || []).filter(id => acceptedLinkedInstanceMap.has(id));
+          if (linkedIds.length > 0) {
+            return linkedIds.map(instanceId => {
+              const inst = acceptedLinkedInstanceMap.get(instanceId)!;
+              return {
+                instance_id: instanceId,
+                user_id: syntheticUserId,
+                invite_id: inv.id,
+                instance_name: inst.instance_name,
+                instance_url: inst.instance_url,
+                status: inst.status,
+                storage_limit_gb: inst.storage_limit_gb,
+                created_at: inst.created_at,
+                client_email: inv.email,
+                client_name: inv.name || undefined,
+                client_paid: false,
+                is_external: inst.is_external || false,
+                service_type: inst.service_type || null,
+                invite_status: 'accepted' as const,
+              };
+            });
+          }
+        }
+
+        // No linked instances (or accepted client with no instances) — emit placeholder row
+        return [{
+          instance_id: `invite:${inv.id}`,
+          user_id: syntheticUserId,
+          invite_id: inv.id,
+          instance_name: '',
+          instance_url: '',
+          status: 'none',
+          storage_limit_gb: 0,
+          created_at: '',
+          client_email: inv.email,
+          client_name: inv.name || undefined,
+          client_paid: false,
+          is_external: false,
+          service_type: null as string | null,
+          invite_status: 'accepted' as const,
+        }];
+      });
+
+    // Include pending invites (email-invited clients who haven't accepted yet)
+    // For invites with pre-assigned instances, fetch the real instance details and emit one row per instance.
+    type PendingInviteRecord = { id: string; email: string; name: string | null; linked_instance_ids: string[] | null };
+
+    // Collect all pre-assigned instance IDs across all pending invites
+    const allLinkedInstanceIds = new Set<string>();
+    (pendingInvites || []).forEach((inv: PendingInviteRecord) => {
+      (inv.linked_instance_ids || []).forEach(id => allLinkedInstanceIds.add(id));
+    });
+
+    // Fetch the actual instance details for pre-assigned instances
+    const linkedInstanceMap = new Map<string, {
+      id: string;
+      instance_name: string;
+      instance_url: string;
+      status: string;
+      storage_limit_gb: number;
+      created_at: string;
+      is_external: boolean | null;
+      service_type: string | null;
+    }>();
+    if (allLinkedInstanceIds.size > 0) {
+      const { data: linkedInstances } = await supabaseAdmin
+        .from('pay_per_instance_deployments')
+        .select('id, instance_name, instance_url, status, storage_limit_gb, created_at, is_external, service_type')
+        .in('id', Array.from(allLinkedInstanceIds))
+        .or(`user_id.eq.${effectiveUserId},invited_by_user_id.eq.${effectiveUserId}`)
+        .is('deleted_at', null);
+      (linkedInstances || []).forEach(inst => linkedInstanceMap.set(inst.id, inst));
+    }
+
+    const pendingClients = (pendingInvites || []).flatMap((inv: PendingInviteRecord) => {
+      const linkedIds = (inv.linked_instance_ids || []).filter(id => linkedInstanceMap.has(id));
+
+      // If the invite has pre-assigned instances, emit one real row per instance
+      if (linkedIds.length > 0) {
+        return linkedIds.map(instanceId => {
+          const inst = linkedInstanceMap.get(instanceId)!;
+          return {
+            instance_id: instanceId,
+            user_id: `pending:${inv.id}`,
+            invite_id: inv.id,
+            instance_name: inst.instance_name,
+            instance_url: inst.instance_url,
+            status: inst.status,
+            storage_limit_gb: inst.storage_limit_gb,
+            created_at: inst.created_at,
+            client_email: inv.email,
+            client_name: inv.name || undefined,
+            client_paid: false,
+            is_external: inst.is_external || false,
+            service_type: inst.service_type || null,
+            invite_status: 'pending',
+          };
+        });
+      }
+
+      // No linked instances — emit the placeholder row so the pending client still appears
+      return [{
+        instance_id: `invite:${inv.id}`,
+        user_id: `pending:${inv.id}`,
+        invite_id: inv.id,
+        instance_name: '',
+        instance_url: '',
+        status: 'none',
+        storage_limit_gb: 0,
+        created_at: '',
+        client_email: inv.email,
+        client_name: inv.name || undefined,
+        client_paid: false,
+        is_external: false,
+        service_type: null,
+        invite_status: 'pending',
+      }];
+    });
+
+    // Exclude pending clients whose email already appears as accepted
+    const acceptedEmails = new Set([
+      ...(invites || []).map((inv: InviteRecord) => inv.email),
+      ...instances.map(i => i.client_email).filter(Boolean),
+    ]);
+    const filteredPending = pendingClients.filter(p => !acceptedEmails.has(p.client_email));
+
+    // Deduplicate: real instance rows in inviteOnlyClients may duplicate rows already in `instances`
+    // (e.g., an instance present in client_instances AND in a name-only invite's linked_instance_ids).
+    // Filter out any inviteOnlyClient row whose real instance_id is already in agencyInstanceIds.
+    const deduplicatedInviteOnly = inviteOnlyClients.filter(
+      r => r.instance_id.startsWith('invite:') || !agencyInstanceIds.has(r.instance_id)
+    );
+
+    return NextResponse.json({ instances: [...instances, ...deduplicatedInviteOnly, ...filteredPending] });
+  } catch (error) {
+    console.error('Client instances error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// POST: Directly assign an existing client to an instance (no invite email)
+export async function POST(req: NextRequest) {
+  try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+    }
+
+    const rateLimitResult = checkRateLimit(`assign-instance:${user.id}`, 10, 60 * 1000);
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json({ error: 'Too many requests. Please wait a moment.' }, { status: 429 });
+    }
+
+    const ctx = await getEffectiveOwnerId(supabaseAdmin, user.id);
+    if (!canWrite(ctx.role)) {
+      return NextResponse.json({ error: 'You do not have permission to assign instances' }, { status: 403 });
+    }
+    const effectiveUserId = ctx.ownerId;
+
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+
+    const { instance_id, client_user_id } = body;
+
+    if (!instance_id || !isValidUUID(instance_id)) {
+      return NextResponse.json({ error: 'Valid instance_id required' }, { status: 400 });
+    }
+    if (!client_user_id || !isValidUUID(client_user_id)) {
+      return NextResponse.json({ error: 'Valid client_user_id required' }, { status: 400 });
+    }
+
+    // Verify agency owns this instance (local DB first, then FE API for FE-hosted instances)
+    const { data: localInstance } = await supabaseAdmin
+      .from('pay_per_instance_deployments')
+      .select('id')
+      .eq('id', instance_id)
+      .or(`user_id.eq.${effectiveUserId},invited_by_user_id.eq.${effectiveUserId}`)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (!localInstance) {
+      // Not in local DB — check if it's a FlowEngine-managed instance
+      let isFeOwned = false;
+      try {
+        const portalSettings = await getPortalSettings();
+        const feClient = createFlowEngineClient(portalSettings.flowengine_api_key || undefined);
+        if (feClient) {
+          await feClient.getInstance(instance_id);
+          isFeOwned = true;
+        }
+      } catch {
+        // FE instance not found or FE not configured
+      }
+      if (!isFeOwned) {
+        return NextResponse.json({ error: 'Instance not found or access denied' }, { status: 403 });
+      }
+    }
+
+    // Enforce one-client-per-instance rule
+    const { data: existingAssignment } = await supabaseAdmin
+      .from('client_instances')
+      .select('id, user_id')
+      .eq('instance_id', instance_id)
+      .maybeSingle();
+
+    if (existingAssignment) {
+      if (existingAssignment.user_id === client_user_id) {
+        return NextResponse.json({ error: 'Client already assigned to this instance' }, { status: 400 });
+      }
+      return NextResponse.json({ error: 'Instance already has a client assigned. Revoke access first.' }, { status: 400 });
+    }
+
+    // Create the assignment directly
+    const { error: insertError } = await supabaseAdmin
+      .from('client_instances')
+      .insert({
+        team_id: effectiveUserId,
+        client_id: client_user_id,
+        instance_id,
+        user_id: client_user_id,
+        invited_by: effectiveUserId,
+        assigned_by: effectiveUserId,
+        access_level: 'view',
+      });
+
+    if (insertError) {
+      console.error('Failed to assign instance:', insertError);
+      return NextResponse.json({ error: `Failed to assign instance: ${insertError.message}` }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Assign instance error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// DELETE: Revoke client access to an instance
+export async function DELETE(req: NextRequest) {
+  try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+    }
+
+    const ctx = await getEffectiveOwnerId(supabaseAdmin, user.id);
+    if (!canWrite(ctx.role)) {
+      return NextResponse.json({ error: 'You do not have permission to revoke instance access' }, { status: 403 });
+    }
+    const effectiveUserId = ctx.ownerId;
+
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+
+    const { instance_id, user_id: clientUserId } = body;
+
+    if (!instance_id || !isValidUUID(instance_id)) {
+      return NextResponse.json({ error: 'Valid instance_id required' }, { status: 400 });
+    }
+
+    // Validate clientUserId: must be a real UUID, or a synthetic ni_/pending: prefix
+    if (!clientUserId) {
+      return NextResponse.json({ error: 'Valid user_id required' }, { status: 400 });
+    }
+    const isNameOnly = typeof clientUserId === 'string' && clientUserId.startsWith('ni_');
+    const isPending = typeof clientUserId === 'string' && clientUserId.startsWith('pending:');
+    if (!isNameOnly && !isPending && !isValidUUID(clientUserId)) {
+      return NextResponse.json({ error: 'Valid user_id required' }, { status: 400 });
+    }
+
+    // For name-only (ni_<inviteId>) and pending (pending:<inviteId>) clients, the instance
+    // is stored in linked_instance_ids on the invite row — not in client_instances.
+    if (isNameOnly || isPending) {
+      const inviteId = isNameOnly
+        ? (clientUserId as string).slice('ni_'.length)
+        : (clientUserId as string).slice('pending:'.length);
+
+      // Fetch the invite, scoped to this agency
+      const { data: invite, error: fetchError } = await supabaseAdmin
+        .from('client_invites')
+        .select('id, linked_instance_ids')
+        .eq('id', inviteId)
+        .eq('invited_by', effectiveUserId)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error('Failed to fetch invite:', fetchError);
+        return NextResponse.json({ error: 'Failed to revoke access' }, { status: 500 });
+      }
+      if (!invite) {
+        return NextResponse.json({ error: 'Invite not found or access denied' }, { status: 404 });
+      }
+
+      const updatedIds = (invite.linked_instance_ids || []).filter((id: string) => id !== instance_id);
+
+      const { error: updateError } = await supabaseAdmin
+        .from('client_invites')
+        .update({ linked_instance_ids: updatedIds })
+        .eq('id', inviteId)
+        .eq('invited_by', effectiveUserId);
+
+      if (updateError) {
+        console.error('Failed to update invite linked_instance_ids:', updateError);
+        return NextResponse.json({ error: 'Failed to revoke access' }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    // Normal UUID user — delete from client_instances
+    const { error: deleteError } = await supabaseAdmin
+      .from('client_instances')
+      .delete()
+      .eq('instance_id', instance_id)
+      .eq('invited_by', effectiveUserId)
+      .eq('user_id', clientUserId);
+
+    if (deleteError) {
+      console.error('Failed to revoke access:', deleteError);
+      return NextResponse.json({ error: 'Failed to revoke access' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Revoke access error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
