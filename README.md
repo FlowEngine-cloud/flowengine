@@ -8,9 +8,7 @@ White-label client portal for automation agencies (mainly using n8n). Manage ins
 [![License](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-blue)](./LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/FlowEngine-cloud/flowengine?style=flat)](https://github.com/FlowEngine-cloud/flowengine)
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy/dark-cool?referralCode=3q94YI&utm_medium=integration&utm_source=template&utm_campaign=generic)
-<br>
-[![Deploy on FlowEngine](https://flowengine.cloud/button.svg)](https://flowengine.cloud/deploy/flowengine)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy/dark-cool?referralCode=3q94YI&utm_medium=integration&utm_source=template&utm_campaign=generic)   [![Deploy on FlowEngine](https://flowengine.cloud/button.svg)](https://flowengine.cloud/deploy/flowengine)
 
 **Demo:** https://demo.flowengine.cloud
 
