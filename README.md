@@ -1,14 +1,20 @@
+<div align="center">
+
 # FlowEngine
 
-White-label client portal for n8n agencies. Manage instances, invite clients, control what they see, and bill them via Stripe. Self-hosted, open source.
+White-label client portal for automation agencies (mainly using n8n). Manage instances, invite clients, control what they see, and bill them via Stripe. Self-hosted, open source.
 
 [![Docker](https://img.shields.io/badge/docker-flowenginecloud%2Fflowengine-blue?logo=docker)](https://hub.docker.com/r/flowenginecloud/flowengine)
 [![License](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-blue)](./LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/FlowEngine-cloud/flowengine?style=flat)](https://github.com/FlowEngine-cloud/flowengine)
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/dark-cool?referralCode=3q94YI&utm_medium=integration&utm_source=template&utm_campaign=generic)
-[![Deploy on FlowEngine](https://img.shields.io/badge/deploy-FlowEngine-black?style=flat)](https://flowengine.cloud/deploy/flowengine)
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy/dark-cool?referralCode=3q94YI&utm_medium=integration&utm_source=template&utm_campaign=generic)
+<br>
+[![Deploy on FlowEngine](https://flowengine.cloud/button.svg)](https://flowengine.cloud/deploy/flowengine)
 
 **Demo:** https://demo.flowengine.cloud
+
+</div>
 
 [![Watch the demo](https://img.youtube.com/vi/LbVA6NYQqG4/maxresdefault.jpg)](https://www.youtube.com/watch?v=LbVA6NYQqG4)
 
@@ -131,7 +137,7 @@ To pin a specific version, set `IMAGE_TAG=v0.1.0` in your `.env`.
 
 Deploy the portal on FlowEngine infrastructure — no server setup needed. Requires your own Supabase project.
 
-[![Deploy on FlowEngine](https://img.shields.io/badge/deploy-FlowEngine-black?style=flat)](https://flowengine.cloud/deploy/flowengine)
+[![Deploy on FlowEngine](https://flowengine.cloud/button.svg)](https://flowengine.cloud/deploy/flowengine)
 
 ---
 
