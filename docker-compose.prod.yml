@@ -200,11 +200,11 @@ services:
   # ============================================
   # FlowEngine Portal - Next.js Application
   # Pre-built image from GitHub Container Registry:
-  #   ghcr.io/flowengine-cloud/flowengine:latest
+  #   flowenginecloud/flowengine:latest
   # To pin a version: set IMAGE_TAG=v1.2.3 in your .env
   # ============================================
   portal:
-    image: ghcr.io/flowengine-cloud/flowengine:${IMAGE_TAG:-latest}
+    image: flowenginecloud/flowengine:${IMAGE_TAG:-latest}
     environment:
       NEXT_PUBLIC_SUPABASE_URL: ${SITE_URL:-http://localhost:3000}
       SUPABASE_URL: http://kong:8000

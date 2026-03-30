@@ -2,7 +2,7 @@
 
 White-label client portal for n8n agencies. Manage instances, invite clients, control what they see, and bill them via Stripe. Self-hosted, open source.
 
-[![Docker](https://img.shields.io/badge/docker-ghcr.io%2Fflowengine--cloud%2Fflowengine-blue?logo=docker)](https://github.com/FlowEngine-cloud/flowengine/pkgs/container/flowengine)
+[![Docker](https://img.shields.io/badge/docker-flowenginecloud%2Fflowengine-blue?logo=docker)](https://hub.docker.com/r/flowenginecloud/flowengine)
 [![License](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-blue)](./LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/FlowEngine-cloud/flowengine?style=flat)](https://github.com/FlowEngine-cloud/flowengine)
 
@@ -94,7 +94,7 @@ Set `PORTAL_DOMAIN=portal.yourdomain.com` in `.env` for automatic HTTPS via Let'
 
 ### Option 2: Pre-built Docker image (recommended for production)
 
-Uses the pre-built image from GHCR — no build step, faster setup.
+Uses the pre-built image from Docker Hub — no build step, faster setup.
 
 ```bash
 git clone https://github.com/FlowEngine-cloud/flowengine.git
