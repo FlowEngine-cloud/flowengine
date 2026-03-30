@@ -6,6 +6,7 @@ White-label client portal for n8n agencies. Manage instances, invite clients, co
 [![License](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-blue)](./LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/FlowEngine-cloud/flowengine?style=flat)](https://github.com/FlowEngine-cloud/flowengine)
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/dark-cool?referralCode=3q94YI&utm_medium=integration&utm_source=template&utm_campaign=generic)
+[![Deploy on FlowEngine](https://img.shields.io/badge/deploy-FlowEngine-black?style=flat)](https://flowengine.cloud/deploy/flowengine)
 
 **Demo:** https://demo.flowengine.cloud
 
