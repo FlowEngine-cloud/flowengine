@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import '@fontsource/commit-mono/400.css';
+@import '@fontsource-variable/inter';
 
 /* Hide Next.js dev indicator */
 [data-nextjs-dialog-overlay],
@@ -43,7 +44,7 @@ nextjs-portal {
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-ring: var(--ring);
-  --font-sans: var(--font-inter);
+  --font-sans: 'Inter Variable', 'Inter', system-ui;
   --font-mono: 'Commit Mono', monospace;
 }
 

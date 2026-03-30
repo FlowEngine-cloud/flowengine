@@ -1,16 +1,7 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/components/AuthContext';
 import { Suspense } from 'react';
-
-const inter = Inter({
-  variable: '--font-inter',
-  subsets: ['latin'],
-  display: 'swap',
-  preload: true,
-  fallback: ['system-ui', 'arial'],
-});
 
 export const metadata: Metadata = {
   title: 'FlowEngine Portal',
@@ -53,7 +44,7 @@ export default function RootLayout({
           }
         `}} />
       </head>
-      <body className={`${inter.variable} antialiased`} style={{ backgroundColor: '#000000' }}>
+      <body className='antialiased' style={{ backgroundColor: '#000000' }}>
         <AuthProvider>
           <Suspense fallback={null}>
             {children}
