@@ -51,7 +51,7 @@ test.describe('GET /api/v1/me', () => {
 
   test('returns 401 with a fe_ prefixed key (FlowEngine Cloud key, wrong portal)', async ({ request }) => {
     const res = await request.get('/api/v1/me', {
-      headers: { Authorization: 'Bearer fe_9fa2a441ec32f8259c13b68efb4855b74e9d037d1' },
+      headers: { Authorization: 'Bearer fe_0000000000000000000000000000000000000000' },
     });
     expect(res.status()).toBe(401);
   });
