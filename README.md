@@ -127,7 +127,15 @@ To pin a specific version, set `IMAGE_TAG=v0.1.0` in your `.env`.
 
 ---
 
-### Option 3: Coolify
+### Option 3: FlowEngine Managed Hosting
+
+Deploy the portal on FlowEngine infrastructure — no server setup needed. Requires your own Supabase project.
+
+[![Deploy on FlowEngine](https://img.shields.io/badge/deploy-FlowEngine-black?style=flat)](https://flowengine.cloud/deploy/flowengine)
+
+---
+
+### Option 4: Coolify
 
 1. In Coolify, create a new **Docker Compose** service
 2. Source: **GitHub** → `FlowEngine-cloud/flowengine`
@@ -139,7 +147,7 @@ Coolify will automatically redeploy when the `latest` image is updated (enable *
 
 ---
 
-### Option 4: DigitalOcean Droplet
+### Option 5: DigitalOcean Droplet
 
 ```bash
 # 1. Create a Droplet (Ubuntu 22.04, 2 GB+ RAM recommended)
@@ -159,7 +167,7 @@ For HTTPS, point your domain to the Droplet IP and set `PORTAL_DOMAIN` in `.env`
 
 ---
 
-### Option 5: External Supabase
+### Option 6: External Supabase
 
 If you already have a Supabase project:
 
