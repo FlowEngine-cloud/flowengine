@@ -18,51 +18,56 @@ You run the portal. Your clients log in and see only what you give them access t
 
 ---
 
+## Portal Tabs
 ## Features
 
-### Manage
+##### Manage
 Built mainly for n8n — this is what your clients see. The hosting layer is hidden unless you choose to expose it. Also includes basic management for OpenClaw and Docker instances (status, URL, notes).
 
-### Overview
+##### Overview
 See detailed executions and workflows across all instances at once, with filters by workflow, status, and client.
 
-### UI Embeds
-Build embeddable chatbots, forms, and UI elements and link them to n8n workflows in one click. Automatically detects the webhook and trigger type.
+##### UI Embeds
+Build embeddable chatbots, forms, and UI elements and link them to n8n workflows in one click. it will automatically pick up the webhook and trigger type.
 
-### Templates
-Set up once — clients browse and import workflows based on descriptions and see what credentials they need. Push updates so clients can update live workflows in one click, or push the same update to all clients at once.
+##### Templates
+Set up once — clients browse and import workflows based on descriptions and see what credentials they need. Push updates so clients can update live workflows in one click, or push the same update to all your clients at once.
 
-### Credentials
-Clients add their API keys through the portal and they go straight into their n8n instance. Configure OAuth apps once under Settings (Microsoft, Google, Slack, X, Reddit, LinkedIn) and clients authenticate through the portal — tokens go directly to their n8n.
+##### Credentials
+Clients add their API keys through the portal and they go straight into their n8n instance. Configure one time the OAuth apps once under Settings (Microsoft, Google, Slack, X, Reddit, LinkedIn) and clients authenticate through the portal — their tokens go directly to their n8n.
 
-### Services
+##### Services
 Link a WhatsApp API to clients' instances.
+
+##### Settings
+n8n API key and manage client AI usage and choose who pays for it (works when hosting with FlowEngine)
 
 ---
 
 ### Hosting
 Deploy and manage instances. Not visible to clients by default.
 
-- **n8n** — connect your own self-hosted instance or deploy via FlowEngine managed hosting
-- **OpenClaw** — multi-channel bot platform (Telegram, Discord, Slack)
-- **Docker / Website** — deploy any Docker image or static site
-- **Connect external** — link any existing instance via URL + API key
+- **n8n** - connect your own self-hosted instance or deploy via FlowEngine managed hosting
+- **OpenClaw** - multi-channel bot platform (Telegram, Discord, Slack)
+- **Docker / Website** - deploy any Docker image or static site
+- **Connect external** - link any existing instance via URL + API key
 
 ### Clients
 Invite clients and control what they see:
+- Invite clients.
 - Assign which instances a client can access
-- Clients get their own login and see only what is assigned to them
-- Manage payments and subscriptions via Stripe
-- Track AI usage
-- Invite their team members
+- Clients get their own login and see only what assinged for them.
+- Manage payments/ subscription via Stripe
+- AI usage
+- Invite thier team members
 
 ### Settings
-- **Branding** — logo and company name
-- **Authentication** — Google/GitHub OAuth, signup restrictions
-- **SMTP** — email for client invitations
-- **Stripe** — connect your Stripe account to bill clients
-- **OAuth apps** — configure Microsoft, Google, Slack, X, Reddit, LinkedIn for n8n client authentication
-- **Team** — invite team members with role-based access
+- **Branding** - logo and company name
+- **Authentication** - Google/GitHub OAuth, signup restrictions
+- **SMTP** - email for client invitations
+- **Stripe** - connect your Stripe account to bill clients
+- **OAuth apps** - configure Microsoft, Google, Slack, X, Reddit, LinkedIn for n8n client authentication
+- **Team** - invite team members with role-based access
 
 ---
 
