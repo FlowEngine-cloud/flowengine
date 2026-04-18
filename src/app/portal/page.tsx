@@ -150,7 +150,7 @@ function PortalPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { session, loading: authLoading } = useAuth();
-  const { role, loading: roleLoading } = usePortalRole();
+  const { role } = usePortalRole();
   const { instances: portalInstances, loading: instancesLoading } = usePortalInstances();
 
   // Update URL without triggering Next.js navigation (avoids re-renders and navigation conflicts)
@@ -204,23 +204,7 @@ function PortalPageContent() {
     updateUrl(params);
   }, [updateUrl]);
 
-  // Clients with a single instance auto-select it; multiple instances see the "All" overview
-  const didAutoSelect = useRef(false);
-  useEffect(() => {
-    if (roleLoading || instancesLoading || didAutoSelect.current) return;
-    if (role === 'client' && instanceFilter === 'all') {
-      const clientInsts = portalInstances.filter(i => i.access === 'client');
-      if (clientInsts.length === 1) {
-        didAutoSelect.current = true;
-        setInstanceFilterState(clientInsts[0].id);
-        const params = new URLSearchParams(window.location.search);
-        params.set('instance', clientInsts[0].id);
-        params.delete('view');
-        params.delete('status');
-        window.history.replaceState(window.history.state, '', `/portal?${params.toString()}`);
-      }
-    }
-  }, [role, roleLoading, instancesLoading, portalInstances, instanceFilter]);
+  // Clients land in the aggregated 'all' view and can click into any instance from the sidebar.
 
   // URL persistence for dashboard view and filters
   // Note: uses ?view= instead of ?tab= to avoid conflict with ClientPanelContent's ?tab= param
@@ -866,16 +850,14 @@ function PortalPageContent() {
         {/* Content area */}
         {instanceFilter !== 'all' ? (
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Header bar — breadcrumb (clients see title only, no back arrow to empty 'all' view) */}
+            {/* Header bar — breadcrumb */}
             <div className="flex-shrink-0 border-b border-gray-800 px-6 h-[64px] flex items-center gap-3 min-w-0">
-              {role !== 'client' && (
-                <button
-                  onClick={() => setInstanceFilter('all')}
-                  className="p-1.5 rounded-lg hover:bg-gray-800/30 text-white/60 hover:text-white transition-colors cursor-pointer shrink-0"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
-              )}
+              <button
+                onClick={() => setInstanceFilter('all')}
+                className="p-1.5 rounded-lg hover:bg-gray-800/30 text-white/60 hover:text-white transition-colors cursor-pointer shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
               <h1 className="text-lg font-semibold text-white truncate">
                 {activePortalInstances.find(i => i.id === instanceFilter)?.instance_name || instanceFilter}
               </h1>

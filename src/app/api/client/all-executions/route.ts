@@ -35,6 +35,26 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
 
+    // Demo mode — return hardcoded data without hitting n8n APIs
+    if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
+      const now = Date.now();
+      return NextResponse.json({
+        executions: [
+          { id: 'exec-1', workflowId: 'demo-wf-1', workflowName: 'Email Campaign Automation', status: 'success', startedAt: new Date(now - 2 * 60 * 1000).toISOString(), instanceId: 'demo-inst-1', instanceName: 'My n8n Automation', clientEmail: '' },
+          { id: 'exec-2', workflowId: 'demo-wf-2', workflowName: 'Slack Notification System',  status: 'success', startedAt: new Date(now - 15 * 60 * 1000).toISOString(), instanceId: 'demo-inst-1', instanceName: 'My n8n Automation', clientEmail: '' },
+          { id: 'exec-3', workflowId: 'demo-wf-1', workflowName: 'Email Campaign Automation', status: 'error',   startedAt: new Date(now - 45 * 60 * 1000).toISOString(), instanceId: 'demo-inst-1', instanceName: 'My n8n Automation', clientEmail: '' },
+          { id: 'exec-4', workflowId: 'demo-wf-2', workflowName: 'Slack Notification System',  status: 'running', startedAt: new Date(now - 1 * 60 * 1000).toISOString(),  instanceId: 'demo-inst-1', instanceName: 'My n8n Automation', clientEmail: '' },
+        ],
+        workflows: [
+          { id: 'demo-wf-1', name: 'Email Campaign Automation', active: true, instanceId: 'demo-inst-1', instanceName: 'My n8n Automation', credentials: [], widgets: [] },
+          { id: 'demo-wf-2', name: 'Slack Notification System',  active: true, instanceId: 'demo-inst-1', instanceName: 'My n8n Automation', credentials: [], widgets: [] },
+        ],
+        instances: [{ instanceId: 'demo-inst-1', instanceName: 'My n8n Automation', instanceUrl: '#', clientEmail: '' }],
+        metrics: { total: 247, success: 231, failed: 15, running: 1 },
+        widgets: [],
+      });
+    }
+
     // Rate limit: max 30 requests per minute per user (this endpoint is expensive)
     const rateLimitResult = checkRateLimit(`all-executions:${user.id}`, 30, 60 * 1000);
     if (!rateLimitResult.allowed) {
@@ -48,20 +68,46 @@ export async function GET(req: NextRequest) {
     const effectiveUserId = await resolveEffectiveUserId(supabaseAdmin, user.id);
 
     // Get all instances user has access to (owned or managed)
-    const { data: instances, error: instancesError } = await supabaseAdmin
-      .from('pay_per_instance_deployments')
-      .select('id, instance_name, instance_url, n8n_api_key, user_id')
-      .or(`user_id.eq.${effectiveUserId},invited_by_user_id.eq.${effectiveUserId}`)
-      .neq('subscription_status', 'canceled')
-      .is('deleted_at', null)
-      .not('n8n_api_key', 'is', null);
+    const [{ data: ownedInstances, error: instancesError }, { data: clientLinks }] = await Promise.all([
+      supabaseAdmin
+        .from('pay_per_instance_deployments')
+        .select('id, instance_name, instance_url, n8n_api_key, user_id')
+        .or(`user_id.eq.${effectiveUserId},invited_by_user_id.eq.${effectiveUserId}`)
+        .neq('subscription_status', 'canceled')
+        .is('deleted_at', null)
+        .not('n8n_api_key', 'is', null),
+      // Also check if user is a client of any instances
+      supabaseAdmin
+        .from('client_instances')
+        .select('instance_id')
+        .eq('user_id', user.id),
+    ]);
 
     if (instancesError) {
       console.error('Failed to fetch instances:', instancesError);
       return NextResponse.json({ error: 'Failed to fetch instances' }, { status: 500 });
     }
 
-    if (!instances || instances.length === 0) {
+    // For client users: fetch the instances they are clients of
+    let clientOwnedInstances: any[] = [];
+    if (clientLinks && clientLinks.length > 0) {
+      const clientInstanceIds = clientLinks.map((cl: any) => cl.instance_id);
+      const seenIds = new Set((ownedInstances || []).map((i: any) => i.id));
+      const missingIds = clientInstanceIds.filter((id: string) => !seenIds.has(id));
+      if (missingIds.length > 0) {
+        const { data: fetched } = await supabaseAdmin
+          .from('pay_per_instance_deployments')
+          .select('id, instance_name, instance_url, n8n_api_key, user_id')
+          .in('id', missingIds)
+          .is('deleted_at', null)
+          .not('n8n_api_key', 'is', null);
+        clientOwnedInstances = fetched || [];
+      }
+    }
+
+    const instances = [...(ownedInstances || []), ...clientOwnedInstances];
+
+    if (instances.length === 0) {
       return NextResponse.json({
         executions: [],
         workflows: [],
