@@ -835,8 +835,9 @@ function PortalPageContent() {
               }
             }}
             action={
+              role === 'client' ? null : (
               <div className="space-y-2">
-                {role !== 'client' && uniqueEmails.length > 0 && (
+                {uniqueEmails.length > 0 && (
                   <SearchableSelect
                     value={emailFilter}
                     onChange={setEmailFilter}
@@ -850,11 +851,12 @@ function PortalPageContent() {
                   value={instanceFilter}
                   onChange={setInstanceFilter}
                   options={[
-                    ...(role !== 'client' ? [{ value: 'all', label: 'All Instances' }] : []),
+                    { value: 'all', label: 'All Instances' },
                     ...activePortalInstances.map(inst => ({ value: inst.id, label: inst.instance_name })),
                   ]}
                 />
               </div>
+              )
             }
           />
         )}
@@ -864,29 +866,33 @@ function PortalPageContent() {
         {/* Content area */}
         {instanceFilter !== 'all' ? (
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Header bar — breadcrumb */}
+            {/* Header bar — breadcrumb (clients see title only, no back arrow to empty 'all' view) */}
             <div className="flex-shrink-0 border-b border-gray-800 px-6 h-[64px] flex items-center gap-3 min-w-0">
-              <button
-                onClick={() => setInstanceFilter('all')}
-                className="p-1.5 rounded-lg hover:bg-gray-800/30 text-white/60 hover:text-white transition-colors cursor-pointer shrink-0"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
+              {role !== 'client' && (
+                <button
+                  onClick={() => setInstanceFilter('all')}
+                  className="p-1.5 rounded-lg hover:bg-gray-800/30 text-white/60 hover:text-white transition-colors cursor-pointer shrink-0"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+              )}
               <h1 className="text-lg font-semibold text-white truncate">
                 {activePortalInstances.find(i => i.id === instanceFilter)?.instance_name || instanceFilter}
               </h1>
             </div>
-            {/* Mobile instance dropdown */}
-            <div className="md:hidden flex-shrink-0 border-b border-gray-800 px-4 py-3">
-              <SearchableSelect
-                value={instanceFilter}
-                onChange={setInstanceFilter}
-                options={[
-                  ...(role !== 'client' ? [{ value: 'all', label: 'All Instances' }] : []),
-                  ...activePortalInstances.map(inst => ({ value: inst.id, label: inst.instance_name })),
-                ]}
-              />
-            </div>
+            {/* Mobile instance dropdown — hidden for clients (locked to aggregated view) */}
+            {role !== 'client' && (
+              <div className="md:hidden flex-shrink-0 border-b border-gray-800 px-4 py-3">
+                <SearchableSelect
+                  value={instanceFilter}
+                  onChange={setInstanceFilter}
+                  options={[
+                    { value: 'all', label: 'All Instances' },
+                    ...activePortalInstances.map(inst => ({ value: inst.id, label: inst.instance_name })),
+                  ]}
+                />
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto">
               {(() => {
                 const selectedInst = activePortalInstances.find(i => i.id === instanceFilter);
@@ -906,17 +912,19 @@ function PortalPageContent() {
           <div className="flex-shrink-0 border-b border-gray-800 px-6 h-[64px] flex items-center">
             <h1 className="text-lg font-semibold text-white">Overview</h1>
           </div>
-          {/* Sub-header — mobile instance dropdown */}
-          <div className="md:hidden flex-shrink-0 border-b border-gray-800 px-6 py-3 flex items-center">
-            <SearchableSelect
-              value={instanceFilter}
-              onChange={setInstanceFilter}
-              options={[
-                ...(role !== 'client' ? [{ value: 'all', label: 'All Instances' }] : []),
-                ...activePortalInstances.map(inst => ({ value: inst.id, label: inst.instance_name })),
-              ]}
-            />
-          </div>
+          {/* Sub-header — mobile instance dropdown (hidden for clients) */}
+          {role !== 'client' && (
+            <div className="md:hidden flex-shrink-0 border-b border-gray-800 px-6 py-3 flex items-center">
+              <SearchableSelect
+                value={instanceFilter}
+                onChange={setInstanceFilter}
+                options={[
+                  { value: 'all', label: 'All Instances' },
+                  ...activePortalInstances.map(inst => ({ value: inst.id, label: inst.instance_name })),
+                ]}
+              />
+            </div>
+          )}
           <div className="flex-1 overflow-y-auto bg-black px-4 py-4 md:px-6 md:py-8 relative">
             <div className="w-full max-w-6xl mx-auto relative z-10">
 

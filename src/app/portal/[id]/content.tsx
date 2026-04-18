@@ -2372,35 +2372,32 @@ export function ClientPanelContent({ instanceId, embedded = false, portalEmbedde
           </div>
         </div>
       )}
-      {/* Sub-header — quick-access links */}
-      {(embedded || portalEmbedded) && instance && (
-        <>
-          <div className="border-b border-gray-800 bg-black px-6 py-2.5 flex items-center justify-end gap-3">
-            {/* Client Portal */}
+      {/* Sub-header — agency quick-access links (hidden from clients) */}
+      {(embedded || portalEmbedded) && instance && (isOwner || isAgencyManager) && (
+        <div className="border-b border-gray-800 bg-black px-6 py-2.5 flex items-center justify-end gap-3">
+          {/* Client Portal preview — opens the same view in a new tab so agency can share */}
+          <a
+            href={`/portal/${instance.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-white text-black hover:bg-gray-100 rounded-lg font-semibold transition-all"
+          >
+            <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+            Client Portal
+          </a>
+
+          {instance.instance_url && (
             <a
-              href={`/portal/${instance.id}`}
+              href={instance.instance_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-white text-black hover:bg-gray-100 rounded-lg font-semibold transition-all"
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm border border-gray-700 hover:bg-gray-700 text-white/60 rounded-lg font-medium transition-colors"
             >
               <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-              Client Portal
+              n8n Management
             </a>
-
-            {/* n8n Management */}
-            {instance.instance_url && (
-              <a
-                href={instance.instance_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-3 py-2 text-sm border border-gray-700 hover:bg-gray-700 text-white/60 rounded-lg font-medium transition-colors"
-              >
-                <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                n8n Management
-              </a>
-            )}
-          </div>
-        </>
+          )}
+        </div>
       )}
 
       {/* Header — hidden when embedded in portal layout */}
