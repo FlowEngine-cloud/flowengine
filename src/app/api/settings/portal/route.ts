@@ -28,7 +28,30 @@ const ALLOWED_FIELDS = [
 ];
 
 // Fields that should be masked when returned (sensitive values)
-const SENSITIVE_FIELDS = ['n8n_api_key', 'ai_api_key', 'n8n_smtp_pass', 'flowengine_api_key'];
+const SENSITIVE_FIELDS = ['n8n_api_key', 'ai_api_key', 'n8n_smtp_pass', 'flowengine_api_key', 'coolify_api_token'];
+
+// Keys inside oauth_credentials that hold secrets. They are masked on read and
+// never overwritten by masked placeholder values on write.
+const OAUTH_SECRET_KEY_PATTERN = /secret|token|password|apikey|private/i;
+
+// Return a copy of oauth_credentials with secret values masked (UI shows them as "set").
+function maskOauthCredentials(creds: any): Record<string, any> {
+  if (!creds || typeof creds !== 'object') return {};
+  const maskedCreds: Record<string, any> = {};
+  for (const [provider, fields] of Object.entries(creds)) {
+    if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
+      maskedCreds[provider] = fields;
+      continue;
+    }
+    const maskedFields: Record<string, any> = {};
+    for (const [key, value] of Object.entries(fields as Record<string, any>)) {
+      maskedFields[key] =
+        typeof value === 'string' && value && OAUTH_SECRET_KEY_PATTERN.test(key) ? '********' : value;
+    }
+    maskedCreds[provider] = maskedFields;
+  }
+  return maskedCreds;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -80,6 +103,9 @@ export async function GET(req: NextRequest) {
     if (!masked.flowengine_api_key && process.env.FLOWENGINE_API_KEY) {
       masked.flowengine_api_key = '********';
     }
+    // Mask secrets nested inside oauth_credentials (client secrets, tokens)
+    masked.oauth_credentials = maskOauthCredentials(masked.oauth_credentials);
+
     // Remove internal fields
     delete masked.id;
     delete masked.updated_by;
@@ -129,10 +155,41 @@ export async function PATCH(req: NextRequest) {
     // Ensure a row exists, then update it (order by updated_at so we always touch the canonical row)
     const { data: existing } = await getSupabaseAdmin()
       .from('portal_settings')
-      .select('id')
+      .select('id, oauth_credentials')
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    // Restore masked placeholder values inside oauth_credentials from the stored row so a
+    // settings save never overwrites real client secrets with "********". Providers omitted
+    // from the payload are dropped (full-replace semantics preserved for disconnects).
+    if (updates.oauth_credentials && typeof updates.oauth_credentials === 'object') {
+      const existingCreds =
+        existing?.oauth_credentials && typeof existing.oauth_credentials === 'object'
+          ? (existing.oauth_credentials as Record<string, any>)
+          : {};
+      const cleanedCreds: Record<string, any> = {};
+      for (const [provider, fields] of Object.entries(updates.oauth_credentials)) {
+        if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
+          cleanedCreds[provider] = fields;
+          continue;
+        }
+        const prev =
+          existingCreds[provider] && typeof existingCreds[provider] === 'object'
+            ? (existingCreds[provider] as Record<string, any>)
+            : {};
+        const cleanedFields: Record<string, any> = {};
+        for (const [key, value] of Object.entries(fields as Record<string, any>)) {
+          if (value === '********') {
+            if (prev[key] !== undefined) cleanedFields[key] = prev[key];
+            continue;
+          }
+          cleanedFields[key] = typeof value === 'string' ? value.trim() : value;
+        }
+        cleanedCreds[provider] = cleanedFields;
+      }
+      updates.oauth_credentials = cleanedCreds;
+    }
 
     // flowengine_api_key may not exist as a column in older installs — fall back to oauth_credentials JSONB
     const JSONB_FALLBACK_FIELDS = ['flowengine_api_key'];

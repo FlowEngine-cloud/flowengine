@@ -145,7 +145,10 @@ describe('GET /api/settings/portal', () => {
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body.n8n_base_url).toBe('https://n8n.example.com');
-    expect(body.oauth_credentials).toMatchObject({ google: { clientId: 'g-id' } });
+    // Non-secret fields stay visible, secrets nested in oauth_credentials are masked
+    expect(body.oauth_credentials.google.clientId).toBe('g-id');
+    expect(body.oauth_credentials.google.clientSecret).toBe('********');
+    expect(JSON.stringify(body)).not.toContain('g-secret');
   });
 
   it('masks sensitive fields as "********"', async () => {
@@ -155,6 +158,7 @@ describe('GET /api/settings/portal', () => {
       ai_api_key: 'ai-secret',
       n8n_smtp_pass: 'smtp-pass',
       flowengine_api_key: 'fp_secret',
+      coolify_api_token: 'coolify-secret',
     };
     const { select } = buildChain({ data: row, error: null });
     mockClient.from.mockReturnValue({ select });
@@ -165,6 +169,8 @@ describe('GET /api/settings/portal', () => {
     expect(body.ai_api_key).toBe('********');
     expect(body.n8n_smtp_pass).toBe('********');
     expect(body.flowengine_api_key).toBe('********');
+    expect(body.coolify_api_token).toBe('********');
+    expect(JSON.stringify(body)).not.toContain('coolify-secret');
   });
 
   it('does not expose id or updated_by fields', async () => {
@@ -259,6 +265,40 @@ describe('PATCH /api/settings/portal', () => {
     const creds = { google: { clientId: 'g-id', clientSecret: 'g-secret' } };
     const res = await PATCH(makePatchRequest({ oauth_credentials: creds }) as any);
     expect(res.status).toBe(200);
+  });
+
+  it('preserves stored oauth secrets when the UI sends masked placeholders', async () => {
+    mockAuth('user-123');
+    let capturedUpdate: Record<string, any> = {};
+    let callCount = 0;
+    mockClient.from.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        // Existing row lookup (now also fetches oauth_credentials)
+        const maybeSingle = vi.fn().mockResolvedValue({
+          data: { id: 'row-id', oauth_credentials: { google: { clientId: 'old-id', clientSecret: 'g-secret' } } },
+          error: null,
+        });
+        const limit = vi.fn().mockReturnValue({ maybeSingle });
+        const order = vi.fn().mockReturnValue({ limit });
+        const select = vi.fn().mockReturnValue({ order });
+        return { select };
+      }
+      const eq = vi.fn().mockResolvedValue({ error: null });
+      const update = vi.fn().mockImplementation(data => {
+        capturedUpdate = data;
+        return { eq };
+      });
+      return { update };
+    });
+
+    const res = await PATCH(makePatchRequest({
+      oauth_credentials: { google: { clientId: 'new-id', clientSecret: '********' } },
+    }) as any);
+    expect(res.status).toBe(200);
+    // Placeholder replaced by the stored secret; non-secret field updated
+    expect(capturedUpdate.oauth_credentials.google.clientSecret).toBe('g-secret');
+    expect(capturedUpdate.oauth_credentials.google.clientId).toBe('new-id');
   });
 
   it('trims string values before saving', async () => {
