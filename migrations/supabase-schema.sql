@@ -563,9 +563,25 @@ CREATE POLICY "Team can view categories" ON widget_categories FOR SELECT
 CREATE POLICY "Team can manage categories" ON widget_categories FOR ALL
   USING (team_id IN (SELECT team_id FROM profiles WHERE id = auth.uid()));
 
--- Widget category links: accessible if widget is accessible
-CREATE POLICY "Users can view category links" ON widget_category_links FOR SELECT USING (true);
-CREATE POLICY "Users can manage category links" ON widget_category_links FOR ALL USING (true);
+-- Widget category links: accessible only to members of the widget's team
+-- (direct PostgREST access is scoped; server routes use the service role)
+CREATE POLICY "Team can view category links" ON widget_category_links FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM client_widgets w
+    WHERE w.id = widget_category_links.widget_id
+      AND w.team_id IN (SELECT team_id FROM profiles WHERE id = auth.uid())
+  ));
+CREATE POLICY "Team can manage category links" ON widget_category_links FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM client_widgets w
+    WHERE w.id = widget_category_links.widget_id
+      AND w.team_id IN (SELECT team_id FROM profiles WHERE id = auth.uid())
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM client_widgets w
+    WHERE w.id = widget_category_links.widget_id
+      AND w.team_id IN (SELECT team_id FROM profiles WHERE id = auth.uid())
+  ));
 
 -- Workflow templates: public templates visible to all, team templates to team
 CREATE POLICY "Anyone can view public templates" ON workflow_templates FOR SELECT
@@ -673,14 +689,11 @@ WHERE NOT EXISTS (SELECT 1 FROM portal_settings);
 
 ALTER TABLE portal_settings ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Authenticated users can read portal settings"
-  ON portal_settings FOR SELECT TO authenticated
-  USING (true);
-
-CREATE POLICY "Admin can update portal settings"
-  ON portal_settings FOR UPDATE TO authenticated
-  USING (true);
-
+-- portal_settings stores infrastructure secrets (n8n/Coolify/AI/SMTP keys, OAuth
+-- client secrets). No direct PostgREST access for anon or authenticated roles:
+-- reads/writes go through /api/settings/portal (service role, owner/admin-only
+-- updates, secrets masked on read). Public login-page flags are served by
+-- /api/auth-config (service role, non-secret columns only).
 CREATE POLICY "Service role full access portal_settings"
   ON portal_settings FOR ALL TO service_role USING (true);
 
@@ -816,7 +829,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON
   credential_records,
   whatsapp_instances,
   conversations,
-  portal_settings,
   agency_client_billing_settings,
   agency_manual_payments,
   agency_client_notes,
@@ -849,8 +861,8 @@ GRANT ALL ON
   api_key
 TO service_role;
 
--- anon: read-only access to public/portal config tables
-GRANT SELECT ON portal_settings, widget_categories TO anon;
+-- anon: read-only access to public config tables (RLS still applies)
+GRANT SELECT ON widget_categories TO anon;
 
 -- ============================================
 -- Upgrade patches for EXISTING installs
@@ -934,3 +946,33 @@ ALTER TABLE team_members ADD COLUMN IF NOT EXISTS pending_client_invite_id UUID 
 -- ============================================
 -- Done! Your FlowEngine Portal database is ready.
 -- ============================================
+
+-- portal_settings / widget_category_links: security hardening (2026-11)
+-- Existing installs created with the policies above keep them until these run.
+-- Idempotent: safe to re-run.
+DROP POLICY IF EXISTS "Authenticated users can read portal settings" ON portal_settings;
+DROP POLICY IF EXISTS "Admin can update portal settings" ON portal_settings;
+REVOKE SELECT ON portal_settings FROM anon;
+REVOKE SELECT, INSERT, UPDATE, DELETE ON portal_settings FROM authenticated;
+
+DROP POLICY IF EXISTS "Users can view category links" ON widget_category_links;
+DROP POLICY IF EXISTS "Users can manage category links" ON widget_category_links;
+DROP POLICY IF EXISTS "Team can view category links" ON widget_category_links;
+DROP POLICY IF EXISTS "Team can manage category links" ON widget_category_links;
+CREATE POLICY "Team can view category links" ON widget_category_links FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM client_widgets w
+    WHERE w.id = widget_category_links.widget_id
+      AND w.team_id IN (SELECT team_id FROM profiles WHERE id = auth.uid())
+  ));
+CREATE POLICY "Team can manage category links" ON widget_category_links FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM client_widgets w
+    WHERE w.id = widget_category_links.widget_id
+      AND w.team_id IN (SELECT team_id FROM profiles WHERE id = auth.uid())
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM client_widgets w
+    WHERE w.id = widget_category_links.widget_id
+      AND w.team_id IN (SELECT team_id FROM profiles WHERE id = auth.uid())
+  ));
