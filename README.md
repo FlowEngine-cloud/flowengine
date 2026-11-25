@@ -10,6 +10,8 @@ White-label client portal for automation agencies (mainly using n8n). Manage ins
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy/dark-cool?referralCode=3q94YI&utm_medium=integration&utm_source=template&utm_campaign=generic)   [![Deploy on FlowEngine](https://flowengine.cloud/button.svg)](https://flowengine.cloud/deploy/flowengine)
 
+**Demo:** https://demo.flowengine.cloud
+
 </div>
 
 [![Watch the demo](https://img.youtube.com/vi/LbVA6NYQqG4/maxresdefault.jpg)](https://www.youtube.com/watch?v=LbVA6NYQqG4)
